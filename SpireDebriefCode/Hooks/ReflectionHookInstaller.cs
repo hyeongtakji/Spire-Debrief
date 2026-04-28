@@ -28,11 +28,15 @@ public static class ReflectionHookInstaller
         if (!IsRunExportScreen(typeName))
             return 0;
 
-        MethodInfo? ready = type.GetMethod(
-            "_Ready",
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
-        if (ready == null) return 0;
-        return TryPatch(harmony, ready, nameof(RuntimeHooks.RunScreenReadyPostfix), postfix: true) ? 1 : 0;
+        int count = 0;
+        foreach (MethodInfo method in SafeGetMethods(type))
+        {
+            if (!IsScreenReadyMethod(method.Name))
+                continue;
+            count += TryPatch(harmony, method, nameof(RuntimeHooks.RunScreenReadyPostfix), postfix: true) ? 1 : 0;
+        }
+
+        return count;
     }
 
     private static int PatchDecisionType(Harmony harmony, Type type)
@@ -105,12 +109,15 @@ public static class ReflectionHookInstaller
     {
         if (!ContainsAny(typeName, "RunHistory", "RunResult", "GameOver"))
             return false;
-        if (!typeName.EndsWith("Screen", StringComparison.OrdinalIgnoreCase))
-            return false;
         if (ContainsAny(typeName, "Button", "Cell", "Entry", "Item", "List", "Row", "Tile"))
             return false;
-        return true;
+        return typeName.EndsWith("Screen", StringComparison.OrdinalIgnoreCase) ||
+               typeName.EndsWith(".RunHistoryScreen.NRunHistory", StringComparison.Ordinal);
     }
+
+    private static bool IsScreenReadyMethod(string methodName) =>
+        methodName.Equals("_Ready", StringComparison.Ordinal) ||
+        ContainsAny(methodName, "InitScreen", "ShowScreen", "ResizeScreen");
 
     private static bool IsNoisyDecisionType(string typeName) =>
         ContainsAny(

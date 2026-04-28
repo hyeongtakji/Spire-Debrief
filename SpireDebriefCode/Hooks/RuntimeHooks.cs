@@ -23,6 +23,8 @@ public static class RuntimeHooks
         };
 
         button.Pressed += () => ExportFromScreen(control, button);
+        button.Position = new Vector2(32, 32);
+        button.ZIndex = 1000;
 
         Control parent = FindLikelyButtonContainer(control) ?? control;
         parent.AddChild(button);
