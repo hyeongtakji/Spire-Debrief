@@ -1,0 +1,11 @@
+{
+  "id": "SpireDebrief",
+  "name": "Spire Debrief",
+  "author": "Spire Debrief contributors",
+  "description": "Exports high-level Slay the Spire 2 run decisions as LLM-friendly Markdown.",
+  "version": "v0.1.0",
+  "has_pck": false,
+  "has_dll": true,
+  "dependencies": ["BaseLib"],
+  "affects_gameplay": false
+}

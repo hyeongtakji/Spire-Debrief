@@ -1,0 +1,3 @@
+<Project>
+    <Import Project="local.props" Condition="Exists('local.props')" />
+</Project>
