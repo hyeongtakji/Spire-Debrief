@@ -87,7 +87,8 @@ public static class ReflectionHookInstaller
 
     private static bool IsCardRewardMethod(string typeName, string methodName) =>
         ContainsAny(typeName, "CardReward", "RewardScreen", "RewardPanel") &&
-        ContainsAny(methodName, "Show", "Open", "Init", "Choose", "Select", "Pick", "Take", "Skip");
+        (ContainsAny(methodName, "Show", "Open", "Init", "Choose", "Select", "Pick", "Take") ||
+         IsCardRewardSkipMethod(methodName));
 
     private static bool IsItemRewardMethod(string typeName, string methodName) =>
         ContainsAny(typeName, "RelicReward", "PotionReward") &&
@@ -132,6 +133,14 @@ public static class ReflectionHookInstaller
             "MerchantRelic",
             "PostAlternateCardRewardAction",
             "PurchaseStatus");
+
+    private static bool IsCardRewardSkipMethod(string methodName) =>
+        methodName.Equals("Skip", StringComparison.OrdinalIgnoreCase) ||
+        methodName.Equals("SkipReward", StringComparison.OrdinalIgnoreCase) ||
+        methodName.Equals("RewardSkipped", StringComparison.OrdinalIgnoreCase) ||
+        methodName.Equals("OnSkip", StringComparison.OrdinalIgnoreCase) ||
+        methodName.Equals("OnSkipPressed", StringComparison.OrdinalIgnoreCase) ||
+        methodName.Equals("OnSkipButtonPressed", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsEventRuntimeType(string typeName) =>
         typeName.StartsWith("MegaCrit.Sts2.Core.Nodes.Events.", StringComparison.Ordinal) ||

@@ -138,7 +138,7 @@ public static class RuntimeHooks
         }
         else if (ContainsAny(methodName, "Skip"))
         {
-            DebriefRecorder.RecordCardRewardSkipped();
+            DebriefRecorder.RecordCardRewardSkipped(methodName);
         }
         else if (ContainsAny(methodName, "Choose", "Select", "Pick", "Take"))
         {

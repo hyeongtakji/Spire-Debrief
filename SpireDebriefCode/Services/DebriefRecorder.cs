@@ -154,7 +154,7 @@ public static class DebriefRecorder
         }
     }
 
-    public static void RecordCardRewardSkipped()
+    public static void RecordCardRewardSkipped(string methodName)
     {
         lock (Sync)
         {
@@ -166,6 +166,7 @@ public static class DebriefRecorder
                 floor.CardRewards.Add(reward);
 
             reward.Skipped = true;
+            reward.Source = $"skip:{methodName}";
             log.Summary.CardRewardsSkipped++;
             _pendingCardReward = null;
             Save();
@@ -399,7 +400,31 @@ public static class DebriefRecorder
     {
         if (TryConvertIndex(cardSource, out int index) && index >= 0 && index < reward.Choices.Count)
             return reward.Choices[index];
+        DebriefItem? selected = ResolvePickedCardItem(reward, cardSource);
+        if (selected != null) return selected;
         return ReflectionDataExtractor.TryToItem(cardSource, out DebriefItem item, "CARD.") ? item : null;
+    }
+
+    private static DebriefItem? ResolvePickedCardItem(CardRewardDecision reward, object? cardSource)
+    {
+        List<DebriefItem> selectedCards = ReflectionDataExtractor.ExtractItemsWithIdPrefix(
+            cardSource,
+            "CARD.",
+            "SelectedCard",
+            "SelectedCards",
+            "Selected",
+            "Selection",
+            "Card",
+            "Cards");
+        if (selectedCards.Count == 0)
+            selectedCards = ReflectionDataExtractor.ExtractItemsWithIdPrefix(cardSource, "CARD.");
+        if (selectedCards.Count == 0)
+            return null;
+
+        DebriefItem selected = selectedCards[0];
+        return reward.Choices.FirstOrDefault(choice =>
+            selected.Id != null &&
+            string.Equals(choice.Id, selected.Id, StringComparison.OrdinalIgnoreCase)) ?? selected;
     }
 
     private static bool TryConvertIndex(object? source, out int index)
@@ -466,10 +491,13 @@ public static class DebriefRecorder
 
     private static CardRewardDecision? NormalizeCardReward(CardRewardDecision reward)
     {
+        bool verifiedSkip = reward.Source?.StartsWith("skip:", StringComparison.Ordinal) == true;
         reward.Source = null;
         reward.Choices = FilterItems(reward.Choices, "CARD.");
         if (reward.Picked != null && (!HasPrefix(reward.Picked, "CARD.") || !IsCleanItem(reward.Picked)))
             reward.Picked = null;
+        if (reward.Skipped && !verifiedSkip)
+            reward.Skipped = false;
         if (reward.Picked == null && !reward.Skipped) return null;
         if (reward.Choices.Count == 0 && reward.Picked == null) return null;
         return reward;
@@ -501,8 +529,11 @@ public static class DebriefRecorder
     private static bool IsGenericEventChoice(string? value) =>
         value != null &&
         (value.Equals("Proceed", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("진행", StringComparison.OrdinalIgnoreCase) ||
         value.Equals("Continue", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("계속", StringComparison.OrdinalIgnoreCase) ||
         value.Equals("Confirm", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("확인", StringComparison.OrdinalIgnoreCase) ||
         value.Equals("Back", StringComparison.OrdinalIgnoreCase));
 
     private static bool IsCleanDecisionText(string? value)
@@ -511,6 +542,7 @@ public static class DebriefRecorder
 
         return !value.Contains("EventOption title:", StringComparison.Ordinal) &&
                !value.Contains(" textKey:", StringComparison.Ordinal) &&
+               !value.EndsWith("EventLayout", StringComparison.Ordinal) &&
                !value.Contains("MegaCrit.", StringComparison.Ordinal) &&
                !value.Contains("System.", StringComparison.Ordinal) &&
                !value.StartsWith("Func`", StringComparison.Ordinal) &&
