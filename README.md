@@ -44,7 +44,7 @@ When building from WSL against a Windows Steam install, also set
 ```xml
 <Project>
     <PropertyGroup>
-        <Sts2Path>/mnt/c/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2</Sts2Path>
+        <Sts2Path>/mnt/DRIVE/SteamLibrary/steamapps/common/Slay the Spire 2</Sts2Path>
         <Sts2DataDir>$(Sts2Path)/data_sts2_windows_x86_64</Sts2DataDir>
     </PropertyGroup>
 </Project>
