@@ -31,6 +31,7 @@ public static class DebriefStorage
         {
             EnsureDirectories();
             string path = Path.Combine(RunsDir, $"{FileStem(log)}.json");
+            DeleteStaleJsonFiles(log.RunId, path);
             File.WriteAllText(path, JsonSerializer.Serialize(log, JsonOptions));
         }
         catch (Exception ex)
@@ -130,6 +131,27 @@ public static class DebriefStorage
         catch
         {
             return null;
+        }
+    }
+
+    private static void DeleteStaleJsonFiles(string runId, string currentPath)
+    {
+        foreach (string path in Directory.EnumerateFiles(RunsDir, "*.json"))
+        {
+            if (Path.GetFullPath(path).Equals(Path.GetFullPath(currentPath), StringComparison.Ordinal))
+                continue;
+
+            RunDebriefLog? existing = LoadJson(path);
+            if (existing?.RunId != runId) continue;
+
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception ex)
+            {
+                MainFile.Logger.Warn($"Unable to remove stale Spire Debrief JSON log {path}: {ex.Message}");
+            }
         }
     }
 
