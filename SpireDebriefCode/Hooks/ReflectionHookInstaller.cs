@@ -38,6 +38,9 @@ public static class ReflectionHookInstaller
     private static int PatchDecisionType(Harmony harmony, Type type)
     {
         string typeName = type.FullName ?? type.Name;
+        if (IsNoisyDecisionType(typeName))
+            return 0;
+
         int count = 0;
 
         foreach (MethodInfo method in SafeGetMethods(type))
@@ -108,6 +111,19 @@ public static class ReflectionHookInstaller
             return false;
         return true;
     }
+
+    private static bool IsNoisyDecisionType(string typeName) =>
+        ContainsAny(
+            typeName,
+            "CardCreationOptions",
+            "CardCreationResult",
+            "MerchantCardEntry",
+            "MerchantCardHolder",
+            "MerchantInventory",
+            "MerchantPotion",
+            "MerchantRelic",
+            "PostAlternateCardRewardAction",
+            "PurchaseStatus");
 
     private static bool TryPatch(Harmony harmony, MethodBase original, string patchName, bool postfix)
     {

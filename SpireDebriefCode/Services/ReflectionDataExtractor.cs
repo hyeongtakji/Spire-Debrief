@@ -19,12 +19,20 @@ public static class ReflectionDataExtractor
     public static string? TryReadString(object? source, params string[] memberNames)
     {
         object? value = TryReadValue(source, memberNames);
+        string? resolved = ResolveString(value);
+        if (resolved != null) return resolved;
+
+        return null;
+    }
+
+    public static string? ResolveString(object? value)
+    {
         return value switch
         {
             null => null,
             string s when string.IsNullOrWhiteSpace(s) => null,
             string s => s,
-            _ => value.ToString()
+            _ => ResolveObjectString(value)
         };
     }
 
@@ -61,11 +69,29 @@ public static class ReflectionDataExtractor
 
     public static DebriefItem ToItem(object? source)
     {
-        if (source == null) return new DebriefItem();
+        return TryToItem(source, out DebriefItem? item) ? item : new DebriefItem();
+    }
+
+    public static bool TryToItem(object? source, out DebriefItem item, string? requiredIdPrefix = null)
+    {
+        item = new DebriefItem();
+        if (source == null || IsIgnoredItemSource(source)) return false;
 
         object model = TryReadValue(source, "Model", "CardModel", "RelicModel", "PotionModel") ?? source;
+        if (IsIgnoredItemSource(model)) return false;
+
         string? name = TryReadString(model, NameMembers) ?? TryReadString(source, NameMembers);
         string? id = TryReadString(model, IdMembers) ?? TryReadString(source, IdMembers);
+        id = Clean(id);
+        name = Clean(name);
+
+        if (requiredIdPrefix != null &&
+            (id == null || !id.StartsWith(requiredIdPrefix, StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        if (id == null && name == null) return false;
 
         int? upgradeCount =
             TryReadInt(source, "UpgradeCount", "TimesUpgraded", "Upgrades") ??
@@ -76,21 +102,26 @@ public static class ReflectionDataExtractor
             TryReadBool(model, "Upgraded", "IsUpgraded", "IsPlus") ??
             false;
 
-        return new DebriefItem
+        item = new DebriefItem
         {
-            Id = Clean(id),
-            Name = Clean(name) ?? Clean(id) ?? source.GetType().Name,
+            Id = id,
+            Name = name ?? id ?? "Unknown",
             UpgradeCount = upgradeCount is > 0 ? upgradeCount : upgraded ? 1 : null
         };
+        return true;
     }
 
-    public static List<DebriefItem> ExtractItems(object? source, params string[] containerMembers)
+    public static List<DebriefItem> ExtractItems(object? source, params string[] containerMembers) =>
+        ExtractItemsWithIdPrefix(source, null, containerMembers);
+
+    public static List<DebriefItem> ExtractItemsWithIdPrefix(object? source, string? requiredIdPrefix, params string[] containerMembers)
     {
         List<DebriefItem> items = [];
         foreach (object? candidate in EnumerateCandidates(source, containerMembers))
         {
             if (candidate == null || candidate is string) continue;
-            items.Add(ToItem(candidate));
+            if (TryToItem(candidate, out DebriefItem item, requiredIdPrefix))
+                items.Add(item);
         }
 
         return DeduplicateItems(items);
@@ -101,7 +132,7 @@ public static class ReflectionDataExtractor
         List<string> strings = [];
         foreach (object? candidate in EnumerateCandidates(source, containerMembers))
         {
-            string? value = candidate is string s ? s : TryReadString(candidate, NameMembers);
+            string? value = ResolveString(candidate) ?? TryReadString(candidate, NameMembers);
             value = Clean(value);
             if (value != null) strings.Add(value);
         }
@@ -129,11 +160,11 @@ public static class ReflectionDataExtractor
         object player = TryReadValue(source, "Player", "CurrentPlayer", "Players.0") ?? source;
 
         if (finalState.Deck.Count == 0)
-            finalState.Deck = ExtractItems(player, "Deck", "Cards", "MasterDeck", "DrawPile", "CardPile");
+            finalState.Deck = ExtractItemsWithIdPrefix(player, "CARD.", "Deck.Cards", "Cards", "MasterDeck.Cards", "DrawPile.Cards", "CardPile.Cards");
         if (finalState.Relics.Count == 0)
-            finalState.Relics = ExtractItems(player, "Relics", "RelicInventory");
+            finalState.Relics = ExtractItemsWithIdPrefix(player, "RELIC.", "Relics", "RelicInventory", "RelicInventory.Relics");
         if (finalState.Potions.Count == 0)
-            finalState.Potions = ExtractItems(player, "Potions", "PotionSlots");
+            finalState.Potions = ExtractItemsWithIdPrefix(player, "POTION.", "Potions", "PotionSlots", "PotionSlots.Potions");
 
         finalState.Gold ??= TryReadInt(player, "Gold", "Money");
         finalState.CurrentHp ??= TryReadInt(player, "CurrentHp", "CurrentHP", "Hp", "HP", "Health");
@@ -209,6 +240,44 @@ public static class ReflectionDataExtractor
         return null;
     }
 
+    private static string? ResolveObjectString(object value)
+    {
+        foreach (string member in new[] { "Text", "Value", "RawText", "LocalizedText", "Localized", "Key", "Id" })
+        {
+            string? result = ResolveString(TryReadDirectValue(value, member));
+            if (Clean(result) != null) return result;
+        }
+
+        foreach (string methodName in new[] { "GetRawText", "GetText", "GetLocalizedText" })
+        {
+            MethodInfo? method = value.GetType().GetMethod(
+                methodName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                Type.DefaultBinder,
+                Type.EmptyTypes,
+                null);
+            if (method == null) continue;
+
+            try
+            {
+                string? result = ResolveString(method.Invoke(value, []));
+                if (Clean(result) != null) return result;
+            }
+            catch
+            {
+                // Ignore localization helpers that are unavailable for this object.
+            }
+        }
+
+        string? fallback = value.ToString();
+        if (string.IsNullOrWhiteSpace(fallback)) return null;
+        Type type = value.GetType();
+        if (fallback == type.FullName || fallback == type.Name) return null;
+        if (fallback.StartsWith("MegaCrit.", StringComparison.Ordinal)) return null;
+        if (fallback.StartsWith("System.", StringComparison.Ordinal)) return null;
+        return fallback;
+    }
+
     private static bool? TryReadBool(object? source, params string[] memberNames)
     {
         object? value = TryReadValue(source, memberNames);
@@ -222,6 +291,35 @@ public static class ReflectionDataExtractor
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
         return value.Trim();
+    }
+
+    private static bool IsIgnoredItemSource(object source)
+    {
+        Type type = source.GetType();
+        if (typeof(Delegate).IsAssignableFrom(type)) return true;
+
+        string name = type.Name;
+        string fullName = type.FullName ?? name;
+
+        if (name.StartsWith("Func`", StringComparison.Ordinal) ||
+            name.StartsWith("Action`", StringComparison.Ordinal) ||
+            name.Equals("Action", StringComparison.Ordinal) ||
+            name.EndsWith("Action", StringComparison.Ordinal) ||
+            name.EndsWith("Screen", StringComparison.Ordinal) ||
+            name.EndsWith("Entry", StringComparison.Ordinal) ||
+            name.EndsWith("Holder", StringComparison.Ordinal) ||
+            name.Contains("Holder", StringComparison.Ordinal) ||
+            name.EndsWith("Inventory", StringComparison.Ordinal) ||
+            name.EndsWith("Reward", StringComparison.Ordinal) ||
+            name.Equals("PurchaseStatus", StringComparison.Ordinal) ||
+            name.Equals("CardCreationOptions", StringComparison.Ordinal) ||
+            name.Equals("CardCreationResult", StringComparison.Ordinal) ||
+            name.Equals("CardPile", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return fullName.StartsWith("System.", StringComparison.Ordinal);
     }
 
     private static List<DebriefItem> DeduplicateItems(List<DebriefItem> items)

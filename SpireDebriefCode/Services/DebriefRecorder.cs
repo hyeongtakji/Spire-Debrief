@@ -71,8 +71,9 @@ public static class DebriefRecorder
         {
             RunDebriefLog log = EnsureRun();
             FloorLog floor = EnsureFloor(log, _lastFloor, "Unknown");
-            List<DebriefItem> choices = ReflectionDataExtractor.ExtractItems(
+            List<DebriefItem> choices = ReflectionDataExtractor.ExtractItemsWithIdPrefix(
                 source,
+                "CARD.",
                 "Cards", "CardRewards", "RewardCards", "Choices", "Options", "_cards", "_rewardCards");
             if (choices.Count == 0) return;
 
@@ -81,8 +82,7 @@ public static class DebriefRecorder
 
             _pendingCardReward = new CardRewardDecision
             {
-                Choices = choices,
-                Source = source?.GetType().Name
+                Choices = choices
             };
             floor.CardRewards.Add(_pendingCardReward);
             Save();
@@ -96,10 +96,14 @@ public static class DebriefRecorder
             RunDebriefLog log = EnsureRun();
             FloorLog floor = EnsureFloor(log, _lastFloor, "Unknown");
             CardRewardDecision reward = _pendingCardReward ?? new CardRewardDecision();
+            if (reward.Choices.Count == 0) return;
             if (!floor.CardRewards.Contains(reward))
                 floor.CardRewards.Add(reward);
 
-            reward.Picked = ResolvePickedCard(reward, cardSource);
+            DebriefItem? picked = ResolvePickedCard(reward, cardSource);
+            if (picked == null) return;
+
+            reward.Picked = picked;
             reward.Skipped = false;
             log.Summary.CardsPicked++;
             _pendingCardReward = null;
@@ -114,6 +118,7 @@ public static class DebriefRecorder
             RunDebriefLog log = EnsureRun();
             FloorLog floor = EnsureFloor(log, _lastFloor, "Unknown");
             CardRewardDecision reward = _pendingCardReward ?? new CardRewardDecision();
+            if (reward.Choices.Count == 0 && _pendingCardReward == null) return;
             if (!floor.CardRewards.Contains(reward))
                 floor.CardRewards.Add(reward);
 
@@ -153,8 +158,10 @@ public static class DebriefRecorder
             floor.RoomType = "Event";
             floor.Event ??= new EventDecision();
             floor.Event.Name ??= ReflectionDataExtractor.TryReadString(eventSource, "Event.Name", "Event.Id", "Name", "Id");
-            floor.Event.Chosen = ReflectionDataExtractor.TryReadString(choiceSource, "Text", "Label", "Name", "Title", "Id")
-                ?? choiceSource?.ToString();
+            string? chosen = ReflectionDataExtractor.TryReadString(choiceSource, "Text", "Label", "Name", "Title", "Id");
+            if (chosen == null) return;
+
+            floor.Event.Chosen = chosen;
             floor.Event.Result ??= ReflectionDataExtractor.TryReadString(eventSource, "Result", "Outcome", "LastResult");
             Save();
         }
@@ -168,7 +175,11 @@ public static class DebriefRecorder
             FloorLog floor = EnsureFloor(log, _lastFloor, "Shop");
             floor.RoomType = "Shop";
             floor.Shop ??= new ShopDecision();
-            floor.Shop.Purchased.Add(ReflectionDataExtractor.ToItem(purchaseSource));
+            if (!ReflectionDataExtractor.TryToItem(purchaseSource, out DebriefItem item))
+                return;
+            if (!IsShopItem(item)) return;
+
+            floor.Shop.Purchased.Add(item);
             log.Summary.ShopsVisited = Math.Max(log.Summary.ShopsVisited, CountRooms(log, "Shop"));
             Save();
         }
@@ -180,7 +191,10 @@ public static class DebriefRecorder
         {
             RunDebriefLog log = EnsureRun();
             FloorLog floor = EnsureFloor(log, _lastFloor, "Unknown");
-            floor.RelicRewards.Add(ReflectionDataExtractor.ToItem(relicSource));
+            if (!ReflectionDataExtractor.TryToItem(relicSource, out DebriefItem item, "RELIC."))
+                return;
+
+            floor.RelicRewards.Add(item);
             log.Summary.RelicsAcquired++;
             Save();
         }
@@ -192,7 +206,10 @@ public static class DebriefRecorder
         {
             RunDebriefLog log = EnsureRun();
             FloorLog floor = EnsureFloor(log, _lastFloor, "Unknown");
-            floor.PotionRewards.Add(ReflectionDataExtractor.ToItem(potionSource));
+            if (!ReflectionDataExtractor.TryToItem(potionSource, out DebriefItem item, "POTION."))
+                return;
+
+            floor.PotionRewards.Add(item);
             Save();
         }
     }
@@ -204,7 +221,10 @@ public static class DebriefRecorder
             RunDebriefLog log = EnsureRun();
             FloorLog floor = EnsureFloor(log, _lastFloor, "Shop");
             floor.Shop ??= new ShopDecision();
-            floor.Shop.Removed.Add(ReflectionDataExtractor.ToItem(cardSource));
+            if (!ReflectionDataExtractor.TryToItem(cardSource, out DebriefItem item, "CARD."))
+                return;
+
+            floor.Shop.Removed.Add(item);
             log.Summary.CardsRemoved++;
             Save();
         }
@@ -220,7 +240,7 @@ public static class DebriefRecorder
             floor.RestSite = new RestSiteDecision
             {
                 Action = action,
-                Target = targetSource == null ? null : ReflectionDataExtractor.ToItem(targetSource)
+                Target = ReflectionDataExtractor.TryToItem(targetSource, out DebriefItem item, "CARD.") ? item : null
             };
             if (action.Equals("Upgrade", StringComparison.OrdinalIgnoreCase) ||
                 action.Equals("Smith", StringComparison.OrdinalIgnoreCase))
@@ -252,6 +272,7 @@ public static class DebriefRecorder
             RunDebriefLog log = DebriefStorage.LoadBestMatchingJson(runHistorySource) ?? ActiveOrLatest;
             ReflectionDataExtractor.FillMetadata(log, runHistorySource);
             ReflectionDataExtractor.FillFinalState(log.FinalState, runHistorySource);
+            NormalizeForExport(log);
             return log;
         }
     }
@@ -301,11 +322,11 @@ public static class DebriefRecorder
     private static int CountRooms(RunDebriefLog log, string roomType) =>
         log.Floors.Count(f => f.RoomType.Equals(roomType, StringComparison.OrdinalIgnoreCase));
 
-    private static DebriefItem ResolvePickedCard(CardRewardDecision reward, object? cardSource)
+    private static DebriefItem? ResolvePickedCard(CardRewardDecision reward, object? cardSource)
     {
         if (TryConvertIndex(cardSource, out int index) && index >= 0 && index < reward.Choices.Count)
             return reward.Choices[index];
-        return ReflectionDataExtractor.ToItem(cardSource);
+        return ReflectionDataExtractor.TryToItem(cardSource, out DebriefItem item, "CARD.") ? item : null;
     }
 
     private static bool TryConvertIndex(object? source, out int index)
@@ -318,6 +339,82 @@ public static class DebriefRecorder
         }
         if (source == null) return false;
         return int.TryParse(source.ToString(), out index);
+    }
+
+    private static bool IsShopItem(DebriefItem item) =>
+        item.Id != null &&
+        (item.Id.StartsWith("CARD.", StringComparison.OrdinalIgnoreCase) ||
+         item.Id.StartsWith("RELIC.", StringComparison.OrdinalIgnoreCase) ||
+         item.Id.StartsWith("POTION.", StringComparison.OrdinalIgnoreCase));
+
+    private static void NormalizeForExport(RunDebriefLog log)
+    {
+        log.FinalState.Deck = FilterItems(log.FinalState.Deck, "CARD.");
+        log.FinalState.Relics = FilterItems(log.FinalState.Relics, "RELIC.");
+        log.FinalState.Potions = FilterItems(log.FinalState.Potions, "POTION.");
+
+        foreach (FloorLog floor in log.Floors)
+        {
+            floor.CardRewards = floor.CardRewards
+                .Select(NormalizeCardReward)
+                .Where(reward => reward != null)
+                .Cast<CardRewardDecision>()
+                .ToList();
+            floor.RelicRewards = FilterItems(floor.RelicRewards, "RELIC.");
+            floor.PotionRewards = FilterItems(floor.PotionRewards, "POTION.");
+
+            if (floor.Shop != null)
+            {
+                floor.Shop.Purchased = floor.Shop.Purchased.Where(IsShopItem).Where(IsCleanItem).ToList();
+                floor.Shop.Removed = FilterItems(floor.Shop.Removed, "CARD.");
+            }
+        }
+
+        log.Summary = new SummaryCounts
+        {
+            CardsPicked = log.Floors.SelectMany(f => f.CardRewards).Count(r => r.Picked != null),
+            CardRewardsSkipped = log.Floors.SelectMany(f => f.CardRewards).Count(r => r.Skipped),
+            CardsRemoved = log.Floors.Sum(f => f.Shop?.Removed.Count ?? 0),
+            CardsUpgraded = log.Floors.Count(f => f.RestSite?.Action is "Upgrade" or "Smith"),
+            RelicsAcquired = log.Floors.Sum(f => f.RelicRewards.Count),
+            ShopsVisited = log.Floors.Count(f => f.RoomType.Equals("Shop", StringComparison.OrdinalIgnoreCase)),
+            ElitesFought = log.Floors.Count(f => f.RoomType.Equals("Elite", StringComparison.OrdinalIgnoreCase))
+        };
+    }
+
+    private static CardRewardDecision? NormalizeCardReward(CardRewardDecision reward)
+    {
+        reward.Source = null;
+        reward.Choices = FilterItems(reward.Choices, "CARD.");
+        if (reward.Picked != null && (!HasPrefix(reward.Picked, "CARD.") || !IsCleanItem(reward.Picked)))
+            reward.Picked = null;
+        if (reward.Choices.Count == 0 && reward.Picked == null) return null;
+        return reward;
+    }
+
+    private static List<DebriefItem> FilterItems(List<DebriefItem> items, string idPrefix) =>
+        items.Where(item => HasPrefix(item, idPrefix)).Where(IsCleanItem).ToList();
+
+    private static bool HasPrefix(DebriefItem item, string idPrefix) =>
+        item.Id != null && item.Id.StartsWith(idPrefix, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsCleanItem(DebriefItem item)
+    {
+        string name = item.Name;
+        return !name.Contains("MegaCrit.", StringComparison.Ordinal) &&
+               !name.Contains("System.", StringComparison.Ordinal) &&
+               !name.StartsWith("Func`", StringComparison.Ordinal) &&
+               !name.StartsWith("Action`", StringComparison.Ordinal) &&
+               !name.Equals("Action", StringComparison.Ordinal) &&
+               !name.EndsWith("Action", StringComparison.Ordinal) &&
+               !name.EndsWith("Screen", StringComparison.Ordinal) &&
+               !name.Contains("Holder", StringComparison.Ordinal) &&
+               !name.EndsWith("Inventory", StringComparison.Ordinal) &&
+               !name.EndsWith("Reward", StringComparison.Ordinal) &&
+               !name.Equals("PurchaseStatus", StringComparison.Ordinal) &&
+               !name.Equals("CardCreationOptions", StringComparison.Ordinal) &&
+               !name.Equals("CardCreationResult", StringComparison.Ordinal) &&
+               !name.Equals("CardPile", StringComparison.Ordinal);
     }
 
     private static void Save()
