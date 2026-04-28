@@ -219,7 +219,7 @@ public static class DebriefRecorder
             FloorLog floor = EnsureFloor(log, _lastFloor, "Shop");
             floor.RoomType = "Shop";
             floor.Shop ??= new ShopDecision();
-            if (!ReflectionDataExtractor.TryToItem(purchaseSource, out DebriefItem item))
+            if (!TryResolveShopItem(purchaseSource, out DebriefItem item))
                 return;
             if (!IsShopItem(item)) return;
 
@@ -444,6 +444,37 @@ public static class DebriefRecorder
         (item.Id.StartsWith("CARD.", StringComparison.OrdinalIgnoreCase) ||
          item.Id.StartsWith("RELIC.", StringComparison.OrdinalIgnoreCase) ||
          item.Id.StartsWith("POTION.", StringComparison.OrdinalIgnoreCase));
+
+    private static bool TryResolveShopItem(object? source, out DebriefItem item)
+    {
+        if (ReflectionDataExtractor.TryToItem(source, out item) && IsShopItem(item))
+            return true;
+
+        foreach (string prefix in new[] { "CARD.", "RELIC.", "POTION." })
+        {
+            List<DebriefItem> items = ReflectionDataExtractor.ExtractItemsWithIdPrefix(
+                source,
+                prefix,
+                "Entry",
+                "MerchantEntry",
+                "Item",
+                "Reward",
+                "Card",
+                "Relic",
+                "Potion",
+                "Model",
+                "CardModel",
+                "RelicModel",
+                "PotionModel");
+            if (items.Count == 0) continue;
+
+            item = items[0];
+            return true;
+        }
+
+        item = new DebriefItem();
+        return false;
+    }
 
     private static void NormalizeForExport(RunDebriefLog log)
     {

@@ -108,12 +108,9 @@ public static class ReflectionHookInstaller
 
     private static bool IsRunExportScreen(string typeName)
     {
-        if (!ContainsAny(typeName, "RunHistory", "RunResult", "GameOver"))
-            return false;
         if (ContainsAny(typeName, "Button", "Cell", "Entry", "Item", "List", "Row", "Tile"))
             return false;
-        return typeName.EndsWith("Screen", StringComparison.OrdinalIgnoreCase) ||
-               typeName.EndsWith(".RunHistoryScreen.NRunHistory", StringComparison.Ordinal);
+        return typeName.EndsWith(".RunHistoryScreen.NRunHistory", StringComparison.Ordinal);
     }
 
     private static bool IsScreenReadyMethod(string methodName) =>
@@ -129,8 +126,6 @@ public static class ReflectionHookInstaller
             "MerchantCardEntry",
             "MerchantCardHolder",
             "MerchantInventory",
-            "MerchantPotion",
-            "MerchantRelic",
             "PostAlternateCardRewardAction",
             "PurchaseStatus");
 

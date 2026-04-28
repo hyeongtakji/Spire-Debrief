@@ -74,7 +74,7 @@ public static class RuntimeHooks
 
             if (ContainsAny(typeName, "Shop", "Merchant"))
             {
-                RecordShop(methodName, firstArg ?? __instance);
+                RecordShop(methodName, __instance, firstArg);
                 return;
             }
 
@@ -155,12 +155,12 @@ public static class RuntimeHooks
             DebriefRecorder.RecordEventChoice(firstArg, instance);
     }
 
-    private static void RecordShop(string methodName, object? source)
+    private static void RecordShop(string methodName, object? instance, object? firstArg)
     {
         if (ContainsAny(methodName, "Remove", "Purge"))
-            DebriefRecorder.RecordCardRemoved(source);
+            DebriefRecorder.RecordCardRemoved(firstArg ?? instance);
         else if (ContainsAny(methodName, "Buy", "Purchase", "Take"))
-            DebriefRecorder.RecordShopPurchase(source);
+            DebriefRecorder.RecordShopPurchase(instance ?? firstArg);
     }
 
     private static void RecordRestSite(string methodName, object? source)
