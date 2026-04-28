@@ -144,6 +144,19 @@ public static class ReflectionDataExtractor
     {
         if (source == null) return;
 
+        log.Metadata.GameRunId ??= TryReadString(
+            source,
+            "GameRunId",
+            "RunId",
+            "Run.Id",
+            "Run.ID",
+            "SaveId",
+            "SaveKey",
+            "SaveData.Id",
+            "SaveData.RunId",
+            "RunGuid",
+            "RunUuid",
+            "RunUUID");
         log.Metadata.Character ??= TryReadString(source, "Character.Name", "Character.Id", "Character", "Player.Character.Name", "Player.Character.Id");
         log.Metadata.Ascension ??= TryReadString(source, "Ascension", "AscensionLevel", "Difficulty.Ascension");
         log.Metadata.Difficulty ??= TryReadString(source, "Difficulty", "RunDifficulty");

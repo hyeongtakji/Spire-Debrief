@@ -109,8 +109,20 @@ public static class RuntimeHooks
             DebriefRecorder.EnterRoom(source);
         else if (ContainsAny(methodName, "Victory"))
             DebriefRecorder.CompleteRun(source, "Victory");
-        else if (ContainsAny(methodName, "Defeat", "End", "Complete"))
+        else if (ContainsAny(methodName, "Abandon"))
+            DebriefRecorder.CompleteRun(source, "Abandoned");
+        else if (ContainsAny(methodName, "Defeat", "Death", "GameOver"))
+            DebriefRecorder.CompleteRun(source, "Defeat");
+        else if (IsRunCompletionMethod(methodName))
             DebriefRecorder.CompleteRun(source);
+    }
+
+    private static bool IsRunCompletionMethod(string methodName)
+    {
+        if (ContainsAny(methodName, "Save", "Quit", "Exit", "Load", "Resume", "Menu"))
+            return false;
+
+        return ContainsAny(methodName, "CompleteRun", "RunComplete", "EndRun", "RunEnd");
     }
 
     private static void RecordCardReward(string methodName, object? instance, object? firstArg)

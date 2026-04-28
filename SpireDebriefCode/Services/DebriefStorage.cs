@@ -45,11 +45,7 @@ public static class DebriefStorage
     {
         try
         {
-            EnsureDirectories();
-            string? path = Directory.EnumerateFiles(RunsDir, "*.json")
-                .OrderByDescending(File.GetLastWriteTimeUtc)
-                .FirstOrDefault();
-            return path == null ? null : LoadJson(path);
+            return LoadFirstLog(_ => true);
         }
         catch (Exception ex)
         {
@@ -58,10 +54,52 @@ public static class DebriefStorage
         }
     }
 
+    public static RunDebriefLog? LoadLatestInProgressJson()
+    {
+        try
+        {
+            return LoadFirstLog(IsInProgress);
+        }
+        catch (Exception ex)
+        {
+            MainFile.Logger.Warn($"Unable to load in-progress Spire Debrief JSON log: {ex.Message}");
+            return null;
+        }
+    }
+
+    public static RunDebriefLog? LoadBestMatchingInProgressJson(object? runSource)
+    {
+        return LoadBestMatchingJson(runSource, requireInProgress: true);
+    }
+
     public static RunDebriefLog? LoadBestMatchingJson(object? runHistorySource)
     {
-        string? seed = ReflectionDataExtractor.TryReadString(runHistorySource, "Seed", "RngSeed", "RunSeed");
-        string? character = ReflectionDataExtractor.TryReadString(runHistorySource, "Character.Name", "Character.Id", "Character");
+        return LoadBestMatchingJson(runHistorySource, requireInProgress: false);
+    }
+
+    public static bool IsInProgress(RunDebriefLog log) =>
+        log.Metadata.EndedAt == null && log.Metadata.Result == null;
+
+    public static bool HasUsableIdentity(object? source)
+    {
+        RunIdentity identity = ExtractIdentity(source);
+        return identity.GameRunId != null || identity.Seed != null;
+    }
+
+    public static bool MatchesIdentity(RunDebriefLog log, object? source)
+    {
+        RunIdentity sourceIdentity = ExtractIdentity(source);
+        if (sourceIdentity.GameRunId == null && sourceIdentity.Seed == null)
+            return false;
+
+        return Matches(log, sourceIdentity);
+    }
+
+    private static RunDebriefLog? LoadBestMatchingJson(object? runHistorySource, bool requireInProgress)
+    {
+        RunIdentity identity = ExtractIdentity(runHistorySource);
+        if (identity.GameRunId == null && identity.Seed == null)
+            return null;
 
         try
         {
@@ -70,9 +108,8 @@ public static class DebriefStorage
             {
                 RunDebriefLog? log = LoadJson(path);
                 if (log == null) continue;
-                bool seedMatches = seed == null || string.Equals(seed, log.Metadata.Seed, StringComparison.OrdinalIgnoreCase);
-                bool characterMatches = character == null || string.Equals(character, log.Metadata.Character, StringComparison.OrdinalIgnoreCase);
-                if (seedMatches && characterMatches) return log;
+                if (requireInProgress && !IsInProgress(log)) continue;
+                if (Matches(log, identity)) return log;
             }
         }
         catch (Exception ex)
@@ -135,6 +172,63 @@ public static class DebriefStorage
         }
     }
 
+    private static RunDebriefLog? LoadFirstLog(Func<RunDebriefLog, bool> predicate)
+    {
+        EnsureDirectories();
+        foreach (string path in Directory.EnumerateFiles(RunsDir, "*.json").OrderByDescending(File.GetLastWriteTimeUtc))
+        {
+            RunDebriefLog? log = LoadJson(path);
+            if (log != null && predicate(log)) return log;
+        }
+
+        return null;
+    }
+
+    private static RunIdentity ExtractIdentity(object? source)
+    {
+        return new RunIdentity(
+            ReflectionDataExtractor.TryReadString(
+                source,
+                "GameRunId",
+                "RunId",
+                "Run.Id",
+                "Run.ID",
+                "SaveId",
+                "SaveKey",
+                "SaveData.Id",
+                "SaveData.RunId",
+                "RunGuid",
+                "RunUuid",
+                "RunUUID"),
+            ReflectionDataExtractor.TryReadString(source, "Seed", "RngSeed", "RunSeed"),
+            ReflectionDataExtractor.TryReadString(source, "Character.Name", "Character.Id", "Character"));
+    }
+
+    private static bool Matches(RunDebriefLog log, RunIdentity identity)
+    {
+        if (identity.GameRunId != null && log.Metadata.GameRunId != null)
+        {
+            return string.Equals(
+                identity.GameRunId,
+                log.Metadata.GameRunId,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (identity.Seed == null || log.Metadata.Seed == null)
+            return false;
+
+        if (!string.Equals(identity.Seed, log.Metadata.Seed, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (identity.Character == null || log.Metadata.Character == null)
+            return true;
+
+        return string.Equals(
+            identity.Character,
+            log.Metadata.Character,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string ResolveModDirectory()
     {
         string? assemblyPath = Assembly.GetExecutingAssembly().Location;
@@ -191,6 +285,8 @@ public static class DebriefStorage
             safe = safe.Replace("--", "-", StringComparison.Ordinal);
         return safe.Trim('-').ToLowerInvariant();
     }
+
+    private sealed record RunIdentity(string? GameRunId, string? Seed, string? Character);
 }
 
 public sealed record ExportResult(string Path, bool Saved, bool Copied, string? Error);

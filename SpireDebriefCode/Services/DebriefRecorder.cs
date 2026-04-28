@@ -16,8 +16,10 @@ public static class DebriefRecorder
         {
             lock (Sync)
             {
-                _active ??= DebriefStorage.LoadLatestJson() ?? CreateRun();
-                return _active;
+                _active ??= DebriefStorage.LoadLatestInProgressJson();
+                if (_active != null) return _active;
+
+                return DebriefStorage.LoadLatestJson() ?? CreateRun();
             }
         }
     }
@@ -27,9 +29,12 @@ public static class DebriefRecorder
         lock (Sync)
         {
             _modVersion = modVersion;
-            _active = DebriefStorage.LoadLatestJson();
+            _active = DebriefStorage.LoadLatestInProgressJson();
             if (_active != null)
+            {
                 _active.Metadata.ModVersion ??= modVersion;
+                RestoreTransientState(_active);
+            }
         }
     }
 
@@ -37,8 +42,29 @@ public static class DebriefRecorder
     {
         lock (Sync)
         {
+            RunDebriefLog? matchingLog = DebriefStorage.LoadBestMatchingInProgressJson(runSource);
+            if (matchingLog != null)
+            {
+                _active = matchingLog;
+                ReflectionDataExtractor.FillMetadata(_active, runSource);
+                RestoreTransientState(_active);
+                Save();
+                return;
+            }
+
+            if (_active != null &&
+                DebriefStorage.IsInProgress(_active) &&
+                CanContinueActiveRun(_active, runSource))
+            {
+                ReflectionDataExtractor.FillMetadata(_active, runSource);
+                RestoreTransientState(_active);
+                Save();
+                return;
+            }
+
             _active = CreateRun();
             ReflectionDataExtractor.FillMetadata(_active, runSource);
+            RestoreTransientState(_active);
             Save();
         }
     }
@@ -286,7 +312,37 @@ public static class DebriefRecorder
         }
     };
 
-    private static RunDebriefLog EnsureRun() => _active ??= CreateRun();
+    private static RunDebriefLog EnsureRun()
+    {
+        if (_active != null && DebriefStorage.IsInProgress(_active))
+            return _active;
+
+        _active = DebriefStorage.LoadLatestInProgressJson() ?? CreateRun();
+        RestoreTransientState(_active);
+        return _active;
+    }
+
+    private static bool CanContinueActiveRun(RunDebriefLog log, object? runSource)
+    {
+        if (!DebriefStorage.HasUsableIdentity(runSource))
+            return true;
+
+        if (log.Metadata.GameRunId == null && log.Metadata.Seed == null)
+            return true;
+
+        return DebriefStorage.MatchesIdentity(log, runSource);
+    }
+
+    private static void RestoreTransientState(RunDebriefLog log)
+    {
+        _pendingCardReward = null;
+
+        int maxFloor = log.Floors.Count == 0 ? 1 : log.Floors.Max(floor => floor.Floor);
+        if (log.Metadata.FinalFloor is int finalFloor)
+            maxFloor = Math.Max(maxFloor, finalFloor);
+
+        _lastFloor = Math.Max(1, maxFloor);
+    }
 
     private static FloorLog EnsureFloor(RunDebriefLog log, int floor, string roomType)
     {

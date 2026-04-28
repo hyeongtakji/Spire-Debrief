@@ -12,6 +12,7 @@ public sealed class RunDebriefLog
 
 public sealed class RunMetadata
 {
+    public string? GameRunId { get; set; }
     public string? Character { get; set; }
     public string? Ascension { get; set; }
     public string? Difficulty { get; set; }
