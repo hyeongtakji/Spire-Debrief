@@ -74,9 +74,26 @@ public static class DebriefRecorder
         lock (Sync)
         {
             RunDebriefLog log = EnsureRun();
-            int floor = ReflectionDataExtractor.TryReadInt(roomSource, "Floor", "FloorNumber", "Room.Floor") ?? _lastFloor;
+            int floor = ReflectionDataExtractor.TryReadInt(
+                roomSource,
+                "Floor",
+                "FloorNumber",
+                "Room.Floor",
+                "MapPoint.Floor",
+                "MapPoint.FloorNumber",
+                "Depth",
+                "Y",
+                "Coords.Y",
+                "Coordinates.Y",
+                "Position.Y") ?? _lastFloor;
             _lastFloor = Math.Max(_lastFloor, floor);
-            string roomType = ReflectionDataExtractor.TryReadString(roomSource, "RoomType", "Type", "MapPointType") ?? fallbackRoomType ?? "Unknown";
+            string roomType = ReflectionDataExtractor.TryReadString(
+                roomSource,
+                "RoomType",
+                "Type",
+                "Room.Type",
+                "Room.RoomType",
+                "MapPointType") ?? fallbackRoomType ?? "Unknown";
             FloorLog floorLog = EnsureFloor(log, floor, roomType);
 
             floorLog.RoomType = NormalizeRoomType(roomType);

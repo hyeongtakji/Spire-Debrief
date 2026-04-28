@@ -41,7 +41,10 @@ public static class RuntimeHooks
 
             if (ContainsAny(typeName, "RunManager", "RunState"))
             {
-                RecordRunLifecycle(typeName, methodName, __instance ?? firstArg);
+                object? source = ContainsAny(methodName, "EnterRoom")
+                    ? firstArg ?? __instance
+                    : __instance ?? firstArg;
+                RecordRunLifecycle(typeName, methodName, source);
                 return;
             }
 
