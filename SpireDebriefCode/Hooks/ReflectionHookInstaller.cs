@@ -30,7 +30,9 @@ public static class ReflectionHookInstaller
         if (!ContainsAny(typeName, "Screen", "Panel", "View", "Details", "History", "Result", "GameOver"))
             return 0;
 
-        MethodInfo? ready = AccessTools.Method(type, "_Ready");
+        MethodInfo? ready = type.GetMethod(
+            "_Ready",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
         if (ready == null) return 0;
         return TryPatch(harmony, ready, nameof(RuntimeHooks.RunScreenReadyPostfix), postfix: true) ? 1 : 0;
     }
