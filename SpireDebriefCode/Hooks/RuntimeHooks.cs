@@ -39,47 +39,48 @@ public static class RuntimeHooks
             string methodName = __originalMethod.Name;
             object? firstArg = __args.FirstOrDefault(arg => arg != null);
 
-            if (ContainsAny(typeName, "RunManager", "RunState"))
+            if (typeName.Equals("MegaCrit.Sts2.Core.Runs.RunManager", StringComparison.Ordinal))
             {
-                object? source = ContainsAny(methodName, "EnterRoom")
+                object? source = methodName.Equals("EnterRoomInternal", StringComparison.Ordinal)
                     ? firstArg ?? __instance
                     : __instance ?? firstArg;
-                RecordRunLifecycle(typeName, methodName, source);
+                RecordRunLifecycle(methodName, source);
                 return;
             }
 
-            if (ContainsAny(typeName, "CardReward", "RewardScreen", "RewardPanel"))
+            if (typeName.Equals("MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen", StringComparison.Ordinal))
             {
                 RecordCardReward(methodName, __instance, firstArg);
                 return;
             }
 
-            if (ContainsAny(typeName, "RelicReward"))
+            if (typeName.Equals("MegaCrit.Sts2.Core.Rewards.RelicReward", StringComparison.Ordinal))
             {
                 DebriefRecorder.RecordRelicReward(firstArg ?? __instance);
                 return;
             }
 
-            if (ContainsAny(typeName, "PotionReward"))
+            if (typeName.Equals("MegaCrit.Sts2.Core.Rewards.PotionReward", StringComparison.Ordinal))
             {
                 DebriefRecorder.RecordPotionReward(firstArg ?? __instance);
                 return;
             }
 
-            if (ContainsAny(typeName, "Event"))
+            if (typeName.Equals("MegaCrit.Sts2.Core.Nodes.Events.NEventLayout", StringComparison.Ordinal) ||
+                typeName.Equals("MegaCrit.Sts2.Core.Nodes.Events.NEventOptionButton", StringComparison.Ordinal))
             {
                 RecordEvent(methodName, __instance, firstArg);
                 return;
             }
 
-            if (ContainsAny(typeName, "Shop", "Merchant"))
+            if (typeName.StartsWith("MegaCrit.Sts2.Core.Nodes.Screens.Shops.NMerchant", StringComparison.Ordinal))
             {
                 RecordShop(methodName, __instance, firstArg);
                 return;
             }
 
-            if (ContainsAny(typeName, "RestSite", "Campfire"))
-                RecordRestSite(methodName, firstArg);
+            if (typeName.Equals("MegaCrit.Sts2.Core.Nodes.RestSite.NRestSiteButton", StringComparison.Ordinal))
+                RecordRestSite(__instance);
         }
         catch (Exception ex)
         {
@@ -106,71 +107,88 @@ public static class RuntimeHooks
         }
     }
 
-    private static void RecordRunLifecycle(string typeName, string methodName, object? source)
+    private static void RecordRunLifecycle(string methodName, object? source)
     {
-        if (ContainsAny(methodName, "Start", "Begin"))
+        if (methodName.StartsWith("SetUp", StringComparison.Ordinal))
             DebriefRecorder.BeginRun(source);
-        else if (ContainsAny(methodName, "EnterRoom"))
+        else if (methodName.Equals("EnterRoomInternal", StringComparison.Ordinal))
             DebriefRecorder.EnterRoom(source);
-        else if (ContainsAny(methodName, "Victory"))
-            DebriefRecorder.CompleteRun(source, "Victory");
-        else if (ContainsAny(methodName, "Abandon"))
-            DebriefRecorder.CompleteRun(source, "Abandoned");
-        else if (ContainsAny(methodName, "Defeat", "Death", "GameOver"))
-            DebriefRecorder.CompleteRun(source, "Defeat");
-        else if (IsRunCompletionMethod(methodName))
+        else if (methodName.Equals("OnEnded", StringComparison.Ordinal))
             DebriefRecorder.CompleteRun(source);
-    }
-
-    private static bool IsRunCompletionMethod(string methodName)
-    {
-        if (ContainsAny(methodName, "Save", "Quit", "Exit", "Load", "Resume", "Menu"))
-            return false;
-
-        return ContainsAny(methodName, "CompleteRun", "RunComplete", "EndRun", "RunEnd");
     }
 
     private static void RecordCardReward(string methodName, object? instance, object? firstArg)
     {
-        if (ContainsAny(methodName, "Show", "Open", "Init"))
+        if (methodName.Equals("RefreshOptions", StringComparison.Ordinal))
         {
             DebriefRecorder.RecordCardRewardShown(instance);
         }
-        else if (ContainsAny(methodName, "Skip"))
+        else if (methodName.Equals("OnAlternateRewardSelected", StringComparison.Ordinal))
         {
-            DebriefRecorder.RecordCardRewardSkipped(methodName);
+            string? action = ReflectionDataExtractor.ResolveString(firstArg) ?? firstArg?.ToString();
+            if (action != null &&
+                action.Contains("DismissScreenAndRemoveReward", StringComparison.Ordinal))
+            {
+                DebriefRecorder.RecordCardRewardSkipped(methodName);
+            }
         }
-        else if (ContainsAny(methodName, "Choose", "Select", "Pick", "Take"))
+        else if (methodName.Equals("SelectCard", StringComparison.Ordinal))
         {
-            DebriefRecorder.RecordCardRewardShown(instance);
             DebriefRecorder.RecordCardPicked(firstArg ?? instance);
         }
     }
 
     private static void RecordEvent(string methodName, object? instance, object? firstArg)
     {
-        if (ContainsAny(methodName, "Show", "Init"))
+        if (methodName.Equals("SetEvent", StringComparison.Ordinal) ||
+            methodName.Equals("AddOptions", StringComparison.Ordinal))
+        {
             DebriefRecorder.RecordEventOptions(instance);
-        else if (ContainsAny(methodName, "Option", "Choose", "Select", "Pick"))
-            DebriefRecorder.RecordEventChoice(firstArg, instance);
+        }
+        else if (methodName.Equals("OnRelease", StringComparison.Ordinal))
+        {
+            if (ReflectionDataExtractor.TryReadBool(instance, "Option.IsLocked") == true)
+                return;
+
+            DebriefRecorder.RecordEventChoice(
+                ReflectionDataExtractor.TryReadValue(instance, "Option"),
+                instance);
+        }
     }
 
     private static void RecordShop(string methodName, object? instance, object? firstArg)
     {
-        if (ContainsAny(methodName, "Remove", "Purge"))
+        if (!methodName.Equals("OnSuccessfulPurchase", StringComparison.Ordinal))
+            return;
+
+        string typeName = instance?.GetType().FullName ?? string.Empty;
+        if (typeName.EndsWith(".NMerchantCardRemoval", StringComparison.Ordinal))
             DebriefRecorder.RecordCardRemoved(firstArg ?? instance);
-        else if (ContainsAny(methodName, "Buy", "Purchase", "Take"))
+        else
             DebriefRecorder.RecordShopPurchase(instance ?? firstArg);
     }
 
-    private static void RecordRestSite(string methodName, object? source)
+    private static void RecordRestSite(object? source)
     {
-        string action = ContainsAny(methodName, "Upgrade", "Smith") ? "Upgrade" :
-            ContainsAny(methodName, "Rest") ? "Rest" :
-            ContainsAny(methodName, "Dig") ? "Dig" :
-            ContainsAny(methodName, "Recall") ? "Recall" :
-            methodName;
-        DebriefRecorder.RecordRestSiteAction(action, source);
+        if (ReflectionDataExtractor.TryReadBool(source, "_isUnclickable") == true)
+            return;
+
+        object? option = ReflectionDataExtractor.TryReadValue(source, "Option");
+        string action = ResolveRestSiteAction(option);
+        DebriefRecorder.RecordRestSiteAction(action, option ?? source);
+    }
+
+    private static string ResolveRestSiteAction(object? option)
+    {
+        string typeName = option?.GetType().Name ?? string.Empty;
+        string? title = ReflectionDataExtractor.TryReadString(option, "Title", "Name", "Id");
+        string value = $"{typeName} {title}";
+
+        if (ContainsAny(value, "Smith", "Upgrade")) return "Upgrade";
+        if (ContainsAny(value, "Heal", "Rest")) return "Rest";
+        if (ContainsAny(value, "Dig")) return "Dig";
+        if (ContainsAny(value, "Recall")) return "Recall";
+        return title ?? typeName;
     }
 
     private static Control? FindLikelyButtonContainer(Control root)

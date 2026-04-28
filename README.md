@@ -8,18 +8,25 @@ This repository started as an empty Git repo, so there were no existing mod file
 
 - `[ModInitializer]` entry point in `SpireDebriefCode/MainFile.cs`
 - Harmony runtime patches installed by `SpireDebriefCode/Hooks/ReflectionHookInstaller.cs`
-- Defensive screen injection for run history, run result, and game over screens
+- Defensive screen injection for the compendium run history screen
 - Structured JSON logs written during play
 - Markdown rendered only when the user exports
 
-The hook installer discovers loaded game types by name at runtime. It targets stable screen and decision concepts without referencing private game types directly:
+The hook installer discovers loaded game types at runtime, but it only
+patches exact type and method names that were verified against the game
+assembly. The current MVP hooks are:
 
-- Run screens: type names containing `RunHistory`, `RunResult`, `GameOver`, `Victory`, `Defeat`, or `Stats`
-- Card reward methods: type/method names containing `CardReward`, `Reward`, `Choose`, `Select`, `Pick`, `Skip`, or `Take`
-- Event methods: type/method names containing `Event`, `Option`, `Choose`, or `Select`
-- Shop methods: type/method names containing `Shop`, `Merchant`, `Buy`, `Purchase`, `Remove`, or `Purge`
-- Rest site methods: type/method names containing `RestSite`, `Campfire`, `Rest`, `Upgrade`, `Smith`, `Dig`, or `Recall`
-- Run lifecycle methods: `RunManager` methods containing `Start`, `Begin`, `EnterRoom`, `Complete`, `Victory`, `Defeat`, or `End`
+- Export UI: `RunHistoryScreen.NRunHistory` `_Ready`/screen resize hooks
+- Run lifecycle: `RunManager.SetUp*`, `EnterRoomInternal`, and `OnEnded`
+- Card rewards: `NCardRewardSelectionScreen.RefreshOptions`,
+  `SelectCard`, and `OnAlternateRewardSelected`
+- Relic and potion rewards: `RelicReward.OnSelect` and
+  `PotionReward.OnSelect`
+- Events: `NEventLayout.SetEvent`, `AddOptions`, and
+  `NEventOptionButton.OnRelease`
+- Shops: `NMerchantCard`, `NMerchantRelic`, `NMerchantPotion`, and
+  `NMerchantCardRemoval` `OnSuccessfulPurchase`
+- Rest sites: `NRestSiteButton.OnRelease`
 
 If a runtime type or method is absent in a game build, the mod logs the miss and continues.
 

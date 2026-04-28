@@ -181,8 +181,8 @@ public static class DebriefRecorder
             FloorLog floor = EnsureFloor(log, _lastFloor, "Event");
             floor.RoomType = "Event";
             floor.Event ??= new EventDecision();
-            floor.Event.Name ??= ReflectionDataExtractor.TryReadString(source, "Event.Name", "Event.Id", "Name", "Id");
-            List<string> options = ReflectionDataExtractor.ExtractStrings(source, "Options", "EventOptions", "CurrentOptions", "_options");
+            floor.Event.Name ??= ReflectionDataExtractor.TryReadString(source, "_event.Name", "_event.Id", "Event.Name", "Event.Id", "Name", "Id");
+            List<string> options = ReflectionDataExtractor.ExtractStrings(source, "OptionButtons", "Options", "EventOptions", "CurrentOptions", "_options");
             foreach (string option in options)
             {
                 if (!floor.Event.Options.Any(existing => string.Equals(existing, option, StringComparison.Ordinal)))
@@ -201,7 +201,7 @@ public static class DebriefRecorder
             FloorLog floor = EnsureFloor(log, _lastFloor, "Event");
             floor.RoomType = "Event";
             floor.Event ??= new EventDecision();
-            floor.Event.Name ??= ReflectionDataExtractor.TryReadString(eventSource, "Event.Name", "Event.Id", "Name", "Id");
+            floor.Event.Name ??= ReflectionDataExtractor.TryReadString(eventSource, "_event.Name", "_event.Id", "Event.Name", "Event.Id", "Name", "Id");
             string? chosen = ReflectionDataExtractor.TryReadString(choiceSource, "Text", "Label", "Name", "Title", "Id");
             if (!IsCleanDecisionText(chosen) || IsGenericEventChoice(chosen)) return;
 
@@ -235,7 +235,7 @@ public static class DebriefRecorder
         {
             RunDebriefLog log = EnsureRun();
             FloorLog floor = EnsureFloor(log, _lastFloor, "Unknown");
-            if (!ReflectionDataExtractor.TryToItem(relicSource, out DebriefItem item, "RELIC."))
+            if (!TryResolveRewardItem(relicSource, "RELIC.", out DebriefItem item))
                 return;
 
             floor.RelicRewards.Add(item);
@@ -250,7 +250,7 @@ public static class DebriefRecorder
         {
             RunDebriefLog log = EnsureRun();
             FloorLog floor = EnsureFloor(log, _lastFloor, "Unknown");
-            if (!ReflectionDataExtractor.TryToItem(potionSource, out DebriefItem item, "POTION."))
+            if (!TryResolveRewardItem(potionSource, "POTION.", out DebriefItem item))
                 return;
 
             floor.PotionRewards.Add(item);
@@ -414,6 +414,8 @@ public static class DebriefRecorder
             "SelectedCards",
             "Selected",
             "Selection",
+            "CardNode.Model",
+            "_cardNode.Model",
             "Card",
             "Cards");
         if (selectedCards.Count == 0)
@@ -459,6 +461,13 @@ public static class DebriefRecorder
                 "MerchantEntry",
                 "Item",
                 "Reward",
+                "_cardEntry.CreationResult.Card",
+                "Entry.CreationResult.Card",
+                "_relic",
+                "_relicEntry.Model",
+                "Entry.Model",
+                "_potion",
+                "_potionEntry.Model",
                 "Card",
                 "Relic",
                 "Potion",
@@ -474,6 +483,31 @@ public static class DebriefRecorder
 
         item = new DebriefItem();
         return false;
+    }
+
+    private static bool TryResolveRewardItem(object? source, string prefix, out DebriefItem item)
+    {
+        if (ReflectionDataExtractor.TryToItem(source, out item, prefix))
+            return true;
+
+        List<DebriefItem> items = ReflectionDataExtractor.ExtractItemsWithIdPrefix(
+            source,
+            prefix,
+            "_relic",
+            "ClaimedRelic",
+            "Relic",
+            "_potion",
+            "Potion",
+            "ClaimedPotion",
+            "Model");
+        if (items.Count == 0)
+        {
+            item = new DebriefItem();
+            return false;
+        }
+
+        item = items[0];
+        return true;
     }
 
     private static void NormalizeForExport(RunDebriefLog log)

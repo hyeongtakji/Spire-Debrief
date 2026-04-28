@@ -133,8 +133,9 @@ public static class ReflectionDataExtractor
         foreach (object? candidate in EnumerateCandidates(source, containerMembers))
         {
             string? value =
+                TryReadString(candidate, "Option.Title", "Title") ??
                 TryReadString(candidate, NameMembers) ??
-                TryReadString(candidate, "Text", "Description") ??
+                TryReadString(candidate, "Text", "Option.Description", "Description") ??
                 ResolveString(candidate);
             value = Clean(value);
             if (value != null) strings.Add(value);
@@ -294,7 +295,7 @@ public static class ReflectionDataExtractor
         return fallback;
     }
 
-    private static bool? TryReadBool(object? source, params string[] memberNames)
+    public static bool? TryReadBool(object? source, params string[] memberNames)
     {
         object? value = TryReadValue(source, memberNames);
         if (value == null) return null;
