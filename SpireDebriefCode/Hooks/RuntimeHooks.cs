@@ -13,7 +13,7 @@ public static class RuntimeHooks
     public static void RunScreenReadyPostfix(object __instance)
     {
         if (__instance is not Control control) return;
-        if (HasDescendantNamed(control, ExportButtonName)) return;
+        if (HasExportButtonInScene(control)) return;
 
         Button button = new()
         {
@@ -194,6 +194,13 @@ public static class RuntimeHooks
         }
 
         return false;
+    }
+
+    private static bool HasExportButtonInScene(Control control)
+    {
+        Viewport? root = control.GetTree()?.Root;
+        Node searchRoot = root != null ? root : control;
+        return HasDescendantNamed(searchRoot, ExportButtonName);
     }
 
     private static object? FindSelectedRunObject(object source)

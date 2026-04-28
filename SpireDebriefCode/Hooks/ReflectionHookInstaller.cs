@@ -25,9 +25,7 @@ public static class ReflectionHookInstaller
     private static int PatchRunScreen(Harmony harmony, Type type)
     {
         string typeName = type.FullName ?? type.Name;
-        if (!ContainsAny(typeName, "RunHistory", "RunResult", "GameOver", "Victory", "Defeat", "Stats"))
-            return 0;
-        if (!ContainsAny(typeName, "Screen", "Panel", "View", "Details", "History", "Result", "GameOver"))
+        if (!IsRunExportScreen(typeName))
             return 0;
 
         MethodInfo? ready = type.GetMethod(
@@ -99,6 +97,17 @@ public static class ReflectionHookInstaller
     private static bool IsRestSiteMethod(string typeName, string methodName) =>
         ContainsAny(typeName, "RestSite", "Campfire") &&
         ContainsAny(methodName, "Rest", "Upgrade", "Smith", "Dig", "Recall", "Choose", "Select");
+
+    private static bool IsRunExportScreen(string typeName)
+    {
+        if (!ContainsAny(typeName, "RunHistory", "RunResult", "GameOver"))
+            return false;
+        if (!typeName.EndsWith("Screen", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (ContainsAny(typeName, "Button", "Cell", "Entry", "Item", "List", "Row", "Tile"))
+            return false;
+        return true;
+    }
 
     private static bool TryPatch(Harmony harmony, MethodBase original, string patchName, bool postfix)
     {
