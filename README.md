@@ -38,6 +38,17 @@ dotnet build /p:Sts2Path="/path/to/Slay the Spire 2"
 ```
 
 Or copy `local.props.template` to `local.props` and set `Sts2Path`.
+When building from WSL against a Windows Steam install, also set
+`Sts2DataDir` to the Windows data directory:
+
+```xml
+<Project>
+    <PropertyGroup>
+        <Sts2Path>/mnt/c/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2</Sts2Path>
+        <Sts2DataDir>$(Sts2Path)/data_sts2_windows_x86_64</Sts2DataDir>
+    </PropertyGroup>
+</Project>
+```
 
 To install manually, copy the built `SpireDebrief.dll` and the root
 `SpireDebrief.json` manifest into:
