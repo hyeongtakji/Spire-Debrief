@@ -13,7 +13,7 @@ public static class RuntimeHooks
     public static void RunScreenReadyPostfix(object __instance)
     {
         if (__instance is not Control control) return;
-        if (control.GetNodeOrNull(new NodePath(ExportButtonName)) != null) return;
+        if (HasDescendantNamed(control, ExportButtonName)) return;
 
         Button button = new()
         {
@@ -176,6 +176,24 @@ public static class RuntimeHooks
         }
 
         return null;
+    }
+
+    private static bool HasDescendantNamed(Node root, string name)
+    {
+        Queue<Node> queue = new();
+        queue.Enqueue(root);
+
+        while (queue.Count > 0)
+        {
+            Node current = queue.Dequeue();
+            if (current.Name.ToString().Equals(name, StringComparison.Ordinal))
+                return true;
+
+            foreach (Node child in current.GetChildren())
+                queue.Enqueue(child);
+        }
+
+        return false;
     }
 
     private static object? FindSelectedRunObject(object source)
