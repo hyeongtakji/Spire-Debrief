@@ -132,7 +132,10 @@ public static class ReflectionDataExtractor
         List<string> strings = [];
         foreach (object? candidate in EnumerateCandidates(source, containerMembers))
         {
-            string? value = ResolveString(candidate) ?? TryReadString(candidate, NameMembers);
+            string? value =
+                TryReadString(candidate, NameMembers) ??
+                TryReadString(candidate, "Text", "Description") ??
+                ResolveString(candidate);
             value = Clean(value);
             if (value != null) strings.Add(value);
         }

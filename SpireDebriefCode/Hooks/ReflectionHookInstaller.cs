@@ -94,8 +94,8 @@ public static class ReflectionHookInstaller
         ContainsAny(methodName, "Choose", "Select", "Pick", "Take", "Claim", "Obtain");
 
     private static bool IsEventMethod(string typeName, string methodName) =>
-        ContainsAny(typeName, "Event") &&
-        ContainsAny(methodName, "Show", "Init", "Option", "Choose", "Select", "Pick");
+        IsEventRuntimeType(typeName) &&
+        ContainsAny(methodName, "Show", "Init", "Option", "Choose", "Chosen", "Select", "Pick");
 
     private static bool IsShopMethod(string typeName, string methodName) =>
         ContainsAny(typeName, "Shop", "Merchant") &&
@@ -103,7 +103,7 @@ public static class ReflectionHookInstaller
 
     private static bool IsRestSiteMethod(string typeName, string methodName) =>
         ContainsAny(typeName, "RestSite", "Campfire") &&
-        ContainsAny(methodName, "Rest", "Upgrade", "Smith", "Dig", "Recall", "Choose", "Select");
+        ContainsAny(methodName, "Rest", "Upgrade", "Smith", "Dig", "Recall");
 
     private static bool IsRunExportScreen(string typeName)
     {
@@ -124,6 +124,7 @@ public static class ReflectionHookInstaller
             typeName,
             "CardCreationOptions",
             "CardCreationResult",
+            "HistoryEntry",
             "MerchantCardEntry",
             "MerchantCardHolder",
             "MerchantInventory",
@@ -131,6 +132,11 @@ public static class ReflectionHookInstaller
             "MerchantRelic",
             "PostAlternateCardRewardAction",
             "PurchaseStatus");
+
+    private static bool IsEventRuntimeType(string typeName) =>
+        typeName.StartsWith("MegaCrit.Sts2.Core.Nodes.Events.", StringComparison.Ordinal) ||
+        typeName.Equals("MegaCrit.Sts2.Core.Events.EventOption", StringComparison.Ordinal) ||
+        typeName.StartsWith("MegaCrit.Sts2.Core.Events.Custom.", StringComparison.Ordinal);
 
     private static bool TryPatch(Harmony harmony, MethodBase original, string patchName, bool postfix)
     {

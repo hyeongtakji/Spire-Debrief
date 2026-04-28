@@ -49,7 +49,7 @@ public static class MarkdownRenderer
         md.AppendLine($"## {title}");
         if (items.Count == 0)
         {
-            md.AppendLine("- Unknown");
+            md.AppendLine("- Not captured");
         }
         else
         {

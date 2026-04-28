@@ -185,7 +185,7 @@ public static class DebriefRecorder
             floor.Event ??= new EventDecision();
             floor.Event.Name ??= ReflectionDataExtractor.TryReadString(eventSource, "Event.Name", "Event.Id", "Name", "Id");
             string? chosen = ReflectionDataExtractor.TryReadString(choiceSource, "Text", "Label", "Name", "Title", "Id");
-            if (chosen == null) return;
+            if (!IsCleanDecisionText(chosen) || IsGenericEventChoice(chosen)) return;
 
             floor.Event.Chosen = chosen;
             floor.Event.Result ??= ReflectionDataExtractor.TryReadString(eventSource, "Result", "Outcome", "LastResult");
@@ -424,6 +424,15 @@ public static class DebriefRecorder
                 floor.Shop.Purchased = floor.Shop.Purchased.Where(IsShopItem).Where(IsCleanItem).ToList();
                 floor.Shop.Removed = FilterItems(floor.Shop.Removed, "CARD.");
             }
+
+            if (floor.Event != null)
+                floor.Event = NormalizeEvent(floor.Event);
+            if (floor.RestSite != null &&
+                (!IsKnownRestSiteAction(floor.RestSite.Action) ||
+                 !floor.RoomType.Equals("Rest", StringComparison.OrdinalIgnoreCase)))
+            {
+                floor.RestSite = null;
+            }
         }
 
         log.Summary = new SummaryCounts
@@ -444,8 +453,23 @@ public static class DebriefRecorder
         reward.Choices = FilterItems(reward.Choices, "CARD.");
         if (reward.Picked != null && (!HasPrefix(reward.Picked, "CARD.") || !IsCleanItem(reward.Picked)))
             reward.Picked = null;
+        if (reward.Picked == null && !reward.Skipped) return null;
         if (reward.Choices.Count == 0 && reward.Picked == null) return null;
         return reward;
+    }
+
+    private static EventDecision? NormalizeEvent(EventDecision evt)
+    {
+        evt.Name = IsCleanDecisionText(evt.Name) ? evt.Name : null;
+        evt.Chosen = IsCleanDecisionText(evt.Chosen) && !IsGenericEventChoice(evt.Chosen)
+            ? evt.Chosen
+            : null;
+        evt.Result = IsCleanDecisionText(evt.Result) ? evt.Result : null;
+        evt.Options = evt.Options.Where(IsCleanDecisionText).Distinct(StringComparer.Ordinal).ToList();
+
+        return evt.Name == null && evt.Chosen == null && evt.Result == null && evt.Options.Count == 0
+            ? null
+            : evt;
     }
 
     private static List<DebriefItem> FilterItems(List<DebriefItem> items, string idPrefix) =>
@@ -453,6 +477,28 @@ public static class DebriefRecorder
 
     private static bool HasPrefix(DebriefItem item, string idPrefix) =>
         item.Id != null && item.Id.StartsWith(idPrefix, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsKnownRestSiteAction(string? action) =>
+        action is "Rest" or "Upgrade" or "Smith" or "Dig" or "Recall";
+
+    private static bool IsGenericEventChoice(string? value) =>
+        value != null &&
+        (value.Equals("Proceed", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("Continue", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("Confirm", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("Back", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsCleanDecisionText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+
+        return !value.Contains("EventOption title:", StringComparison.Ordinal) &&
+               !value.Contains(" textKey:", StringComparison.Ordinal) &&
+               !value.Contains("MegaCrit.", StringComparison.Ordinal) &&
+               !value.Contains("System.", StringComparison.Ordinal) &&
+               !value.StartsWith("Func`", StringComparison.Ordinal) &&
+               !value.StartsWith("Action`", StringComparison.Ordinal);
+    }
 
     private static bool IsCleanItem(DebriefItem item)
     {
