@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using Godot;
 using SpireDebrief.SpireDebriefCode;
@@ -15,7 +16,7 @@ public static class DebriefStorage
         AllowTrailingCommas = true
     };
 
-    public static string BaseDir => Path.Combine(OS.GetUserDataDir(), "SpireDebrief");
+    public static string BaseDir => ResolveModDirectory();
     public static string RunsDir => Path.Combine(BaseDir, "runs");
     public static string ExportsDir => Path.Combine(BaseDir, "exports");
 
@@ -132,6 +133,22 @@ public static class DebriefStorage
         {
             return null;
         }
+    }
+
+    private static string ResolveModDirectory()
+    {
+        string? assemblyPath = Assembly.GetExecutingAssembly().Location;
+        if (!string.IsNullOrWhiteSpace(assemblyPath))
+        {
+            string? assemblyDir = Path.GetDirectoryName(assemblyPath);
+            if (!string.IsNullOrWhiteSpace(assemblyDir))
+                return assemblyDir;
+        }
+
+        if (!string.IsNullOrWhiteSpace(AppContext.BaseDirectory))
+            return AppContext.BaseDirectory;
+
+        return Directory.GetCurrentDirectory();
     }
 
     private static void DeleteStaleJsonFiles(string runId, string currentPath)

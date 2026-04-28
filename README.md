@@ -39,15 +39,20 @@ dotnet build /p:Sts2Path="/path/to/Slay the Spire 2"
 
 Or copy `local.props.template` to `local.props` and set `Sts2Path`.
 
-The build copies `SpireDebrief.dll` and `SpireDebrief.json` into the game's `mods/SpireDebrief/` folder.
+To install manually, copy the built `SpireDebrief.dll` and the root
+`SpireDebrief.json` manifest into:
+
+```text
+<Sts2Path>/mods/SpireDebrief/
+```
 
 ## Output
 
-Structured logs and exports are written under the Godot user data directory:
+Structured logs and exports are written under the installed mod folder:
 
 ```text
-<Godot user data>/SpireDebrief/runs/*.json
-<Godot user data>/SpireDebrief/exports/*.md
+<Sts2Path>/mods/SpireDebrief/runs/*.json
+<Sts2Path>/mods/SpireDebrief/exports/*.md
 ```
 
 The export button also attempts to copy Markdown to the clipboard.
