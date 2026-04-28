@@ -197,11 +197,19 @@ public static class DebriefStorage
                 "SaveKey",
                 "SaveData.Id",
                 "SaveData.RunId",
+                "State.RunId",
+                "State.Id",
                 "RunGuid",
                 "RunUuid",
                 "RunUUID"),
-            ReflectionDataExtractor.TryReadString(source, "Seed", "RngSeed", "RunSeed"),
-            ReflectionDataExtractor.TryReadString(source, "Character.Name", "Character.Id", "Character"));
+            ReflectionDataExtractor.TryReadString(source, "Seed", "RngSeed", "RunSeed", "State.Rng.Seed"),
+            ReflectionDataExtractor.TryReadString(
+                source,
+                "Character.Name",
+                "Character.Id",
+                "Character",
+                "State.Players.0.Character.Name",
+                "State.Players.0.Character.Id"));
     }
 
     private static bool Matches(RunDebriefLog log, RunIdentity identity)

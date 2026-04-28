@@ -75,9 +75,23 @@ public static class ReflectionDataExtractor
     public static bool TryToItem(object? source, out DebriefItem item, string? requiredIdPrefix = null)
     {
         item = new DebriefItem();
-        if (source == null || IsIgnoredItemSource(source)) return false;
+        if (source == null) return false;
 
-        object model = TryReadValue(source, "Model", "CardModel", "RelicModel", "PotionModel") ?? source;
+        object model =
+            TryReadValue(
+                source,
+                "CreationResult.Card",
+                "CardNode.Model",
+                "_cardNode.Model",
+                "Card",
+                "Relic",
+                "Potion",
+                "Model",
+                "CardModel",
+                "RelicModel",
+                "PotionModel") ?? source;
+        if (ReferenceEquals(model, source) && IsIgnoredItemSource(source))
+            return false;
         if (IsIgnoredItemSource(model)) return false;
 
         string? name = TryReadString(model, NameMembers) ?? TryReadString(source, NameMembers);
@@ -158,26 +172,28 @@ public static class ReflectionDataExtractor
             "SaveKey",
             "SaveData.Id",
             "SaveData.RunId",
+            "State.RunId",
+            "State.Id",
             "RunGuid",
             "RunUuid",
             "RunUUID");
-        log.Metadata.Character ??= TryReadString(source, "Character.Name", "Character.Id", "Character", "Player.Character.Name", "Player.Character.Id");
-        log.Metadata.Ascension ??= TryReadString(source, "Ascension", "AscensionLevel", "Difficulty.Ascension");
+        log.Metadata.Character ??= TryReadString(source, "Character.Name", "Character.Id", "Character", "Player.Character.Name", "Player.Character.Id", "State.Players.0.Character.Name", "State.Players.0.Character.Id");
+        log.Metadata.Ascension ??= TryReadString(source, "Ascension", "AscensionLevel", "Difficulty.Ascension", "State.AscensionLevel");
         log.Metadata.Difficulty ??= TryReadString(source, "Difficulty", "RunDifficulty");
-        log.Metadata.Seed ??= TryReadString(source, "Seed", "RngSeed", "RunSeed");
+        log.Metadata.Seed ??= TryReadString(source, "Seed", "RngSeed", "RunSeed", "State.Rng.Seed");
         log.Metadata.GameVersion ??= TryReadString(source, "GameVersion", "Version", "BuildVersion");
-        log.Metadata.FinalAct ??= TryReadString(source, "Act", "CurrentAct", "FinalAct");
+        log.Metadata.FinalAct ??= TryReadString(source, "Act", "CurrentAct", "FinalAct", "State.Act.Id");
         log.Metadata.FinalFloor ??= TryReadInt(source, "Floor", "CurrentFloor", "FinalFloor", "Room.Floor");
-        log.Metadata.FinalRoom ??= TryReadString(source, "Room.Name", "Room.Type", "CurrentRoom", "FinalRoom");
+        log.Metadata.FinalRoom ??= TryReadString(source, "Room.Name", "Room.Type", "CurrentRoom", "FinalRoom", "State.CurrentRoom.RoomType");
     }
 
     public static void FillFinalState(FinalRunState finalState, object? source)
     {
         if (source == null) return;
-        object player = TryReadValue(source, "Player", "CurrentPlayer", "Players.0") ?? source;
+        object player = TryReadValue(source, "Player", "CurrentPlayer", "Players.0", "State.Players.0") ?? source;
 
         if (finalState.Deck.Count == 0)
-            finalState.Deck = ExtractItemsWithIdPrefix(player, "CARD.", "Deck.Cards", "Cards", "MasterDeck.Cards", "DrawPile.Cards", "CardPile.Cards");
+            finalState.Deck = ExtractItemsWithIdPrefix(player, "CARD.", "Deck.Cards", "Cards", "MasterDeck.Cards", "DrawPile.Cards", "CardPile.Cards", "DrawPile", "Deck");
         if (finalState.Relics.Count == 0)
             finalState.Relics = ExtractItemsWithIdPrefix(player, "RELIC.", "Relics", "RelicInventory", "RelicInventory.Relics");
         if (finalState.Potions.Count == 0)

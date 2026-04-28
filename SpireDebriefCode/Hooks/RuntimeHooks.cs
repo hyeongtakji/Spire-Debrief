@@ -44,7 +44,7 @@ public static class RuntimeHooks
                 object? source = methodName.Equals("EnterRoomInternal", StringComparison.Ordinal)
                     ? firstArg ?? __instance
                     : __instance ?? firstArg;
-                RecordRunLifecycle(methodName, source);
+                RecordRunLifecycle(methodName, source, firstArg);
                 return;
             }
 
@@ -107,14 +107,19 @@ public static class RuntimeHooks
         }
     }
 
-    private static void RecordRunLifecycle(string methodName, object? source)
+    private static void RecordRunLifecycle(string methodName, object? source, object? firstArg)
     {
         if (methodName.StartsWith("SetUp", StringComparison.Ordinal))
             DebriefRecorder.BeginRun(source);
         else if (methodName.Equals("EnterRoomInternal", StringComparison.Ordinal))
             DebriefRecorder.EnterRoom(source);
         else if (methodName.Equals("OnEnded", StringComparison.Ordinal))
-            DebriefRecorder.CompleteRun(source);
+        {
+            string? result = firstArg is bool victory
+                ? victory ? "Victory" : "Defeat"
+                : null;
+            DebriefRecorder.CompleteRun(source, result);
+        }
     }
 
     private static void RecordCardReward(string methodName, object? instance, object? firstArg)

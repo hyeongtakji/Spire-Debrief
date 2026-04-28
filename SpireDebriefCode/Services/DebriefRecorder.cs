@@ -8,7 +8,7 @@ public static class DebriefRecorder
     private static string _modVersion = "unknown";
     private static RunDebriefLog? _active;
     private static CardRewardDecision? _pendingCardReward;
-    private static int _lastFloor = 1;
+    private static int _lastFloor;
 
     public static RunDebriefLog ActiveOrLatest
     {
@@ -74,19 +74,6 @@ public static class DebriefRecorder
         lock (Sync)
         {
             RunDebriefLog log = EnsureRun();
-            int floor = ReflectionDataExtractor.TryReadInt(
-                roomSource,
-                "Floor",
-                "FloorNumber",
-                "Room.Floor",
-                "MapPoint.Floor",
-                "MapPoint.FloorNumber",
-                "Depth",
-                "Y",
-                "Coords.Y",
-                "Coordinates.Y",
-                "Position.Y") ?? _lastFloor;
-            _lastFloor = Math.Max(_lastFloor, floor);
             string roomType = ReflectionDataExtractor.TryReadString(
                 roomSource,
                 "RoomType",
@@ -94,9 +81,15 @@ public static class DebriefRecorder
                 "Room.Type",
                 "Room.RoomType",
                 "MapPointType") ?? fallbackRoomType ?? "Unknown";
+            roomType = NormalizeRoomType(roomType);
+            if (roomType is "Map" or "Unassigned")
+                return;
+
+            int floor = ResolveFloor(roomSource);
+            _lastFloor = Math.Max(_lastFloor, floor);
             FloorLog floorLog = EnsureFloor(log, floor, roomType);
 
-            floorLog.RoomType = NormalizeRoomType(roomType);
+            floorLog.RoomType = roomType;
             floorLog.Encounter ??= ReflectionDataExtractor.TryReadString(roomSource, "Encounter.Name", "Encounter.Id", "MonsterGroup.Name", "Name");
             if (floorLog.RoomType.Equals("Elite", StringComparison.OrdinalIgnoreCase))
                 log.Summary.ElitesFought = CountRooms(log, "Elite");
@@ -304,7 +297,8 @@ public static class DebriefRecorder
             ReflectionDataExtractor.FillFinalState(log.FinalState, runSource);
             log.Metadata.Result = result ?? log.Metadata.Result ?? ReflectionDataExtractor.TryReadString(runSource, "Result", "Outcome") ?? "Unknown";
             log.Metadata.EndedAt = DateTimeOffset.Now.ToString("O");
-            log.Metadata.FinalFloor ??= _lastFloor;
+            if (log.Metadata.FinalFloor is null or <= 0)
+                log.Metadata.FinalFloor = _lastFloor;
             Save();
         }
     }
@@ -355,11 +349,11 @@ public static class DebriefRecorder
     {
         _pendingCardReward = null;
 
-        int maxFloor = log.Floors.Count == 0 ? 1 : log.Floors.Max(floor => floor.Floor);
+        int maxFloor = log.Floors.Count == 0 ? 0 : log.Floors.Max(floor => floor.Floor);
         if (log.Metadata.FinalFloor is int finalFloor)
             maxFloor = Math.Max(maxFloor, finalFloor);
 
-        _lastFloor = Math.Max(1, maxFloor);
+        _lastFloor = Math.Max(0, maxFloor);
     }
 
     private static FloorLog EnsureFloor(RunDebriefLog log, int floor, string roomType)
@@ -391,6 +385,30 @@ public static class DebriefRecorder
         if (lower.Contains("event") || lower.Contains("ancient")) return "Event";
         if (lower.Contains("monster") || lower.Contains("enemy") || lower.Contains("combat")) return "Monster";
         return roomType.Trim();
+    }
+
+    private static int ResolveFloor(object? roomSource)
+    {
+        int? floor = ReflectionDataExtractor.TryReadInt(
+            roomSource,
+            "Floor",
+            "FloorNumber",
+            "Room.Floor",
+            "MapPoint.Floor",
+            "MapPoint.FloorNumber",
+            "Depth",
+            "Y",
+            "Coords.Y",
+            "Coordinates.Y",
+            "Position.Y");
+        if (floor is int explicitFloor && explicitFloor > 0)
+            return explicitFloor;
+
+        int? roomId = ReflectionDataExtractor.TryReadInt(roomSource, "Id");
+        if (roomId is int id && id >= 0)
+            return id + 1;
+
+        return _lastFloor + 1;
     }
 
     private static int CountRooms(RunDebriefLog log, string roomType) =>
@@ -575,7 +593,11 @@ public static class DebriefRecorder
             ? evt.Chosen
             : null;
         evt.Result = IsCleanDecisionText(evt.Result) ? evt.Result : null;
-        evt.Options = evt.Options.Where(IsCleanDecisionText).Distinct(StringComparer.Ordinal).ToList();
+        evt.Options = evt.Options
+            .Where(IsCleanDecisionText)
+            .Where(option => !IsGenericEventChoice(option))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
 
         return evt.Name == null && evt.Chosen == null && evt.Result == null && evt.Options.Count == 0
             ? null
