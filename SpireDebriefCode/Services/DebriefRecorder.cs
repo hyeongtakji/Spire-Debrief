@@ -307,7 +307,8 @@ public static class DebriefRecorder
     {
         lock (Sync)
         {
-            RunDebriefLog log = DebriefStorage.LoadBestMatchingJson(runHistorySource) ?? ActiveOrLatest;
+            RunDebriefLog sourceLog = DebriefStorage.LoadBestMatchingJson(runHistorySource) ?? ActiveOrLatest;
+            RunDebriefLog log = CloneRun(sourceLog);
             ReflectionDataExtractor.FillMetadata(log, runHistorySource);
             ReflectionDataExtractor.FillFinalState(log.FinalState, runHistorySource);
             NormalizeForExport(log);
@@ -322,6 +323,108 @@ public static class DebriefRecorder
             ModVersion = _modVersion,
             StartedAt = DateTimeOffset.Now.ToString("O")
         }
+    };
+
+    private static RunDebriefLog CloneRun(RunDebriefLog source) => new()
+    {
+        SchemaVersion = source.SchemaVersion,
+        RunId = source.RunId,
+        Metadata = CloneMetadata(source.Metadata),
+        FinalState = CloneFinalState(source.FinalState),
+        Floors = source.Floors.Select(CloneFloor).ToList(),
+        Summary = CloneSummary(source.Summary)
+    };
+
+    private static RunMetadata CloneMetadata(RunMetadata source) => new()
+    {
+        GameRunId = source.GameRunId,
+        Character = source.Character,
+        Ascension = source.Ascension,
+        Difficulty = source.Difficulty,
+        Seed = source.Seed,
+        StartedAt = source.StartedAt,
+        EndedAt = source.EndedAt,
+        GameVersion = source.GameVersion,
+        ModVersion = source.ModVersion,
+        Result = source.Result,
+        FinalAct = source.FinalAct,
+        FinalFloor = source.FinalFloor,
+        FinalRoom = source.FinalRoom
+    };
+
+    private static FinalRunState CloneFinalState(FinalRunState source) => new()
+    {
+        Deck = CloneItems(source.Deck),
+        Relics = CloneItems(source.Relics),
+        Potions = CloneItems(source.Potions),
+        Gold = source.Gold,
+        CurrentHp = source.CurrentHp,
+        MaxHp = source.MaxHp
+    };
+
+    private static FloorLog CloneFloor(FloorLog source) => new()
+    {
+        Floor = source.Floor,
+        RoomType = source.RoomType,
+        Encounter = source.Encounter,
+        PathingChoice = source.PathingChoice,
+        DamageTaken = source.DamageTaken,
+        CardRewards = source.CardRewards.Select(CloneCardReward).ToList(),
+        RelicRewards = CloneItems(source.RelicRewards),
+        PotionRewards = CloneItems(source.PotionRewards),
+        Event = source.Event == null ? null : CloneEvent(source.Event),
+        Shop = source.Shop == null ? null : CloneShop(source.Shop),
+        RestSite = source.RestSite == null ? null : CloneRestSite(source.RestSite),
+        Notes = source.Notes.ToList()
+    };
+
+    private static CardRewardDecision CloneCardReward(CardRewardDecision source) => new()
+    {
+        Choices = CloneItems(source.Choices),
+        Picked = source.Picked == null ? null : CloneItem(source.Picked),
+        Skipped = source.Skipped,
+        Source = source.Source
+    };
+
+    private static EventDecision CloneEvent(EventDecision source) => new()
+    {
+        Name = source.Name,
+        Options = source.Options.ToList(),
+        Chosen = source.Chosen,
+        Result = source.Result
+    };
+
+    private static ShopDecision CloneShop(ShopDecision source) => new()
+    {
+        Purchased = CloneItems(source.Purchased),
+        Removed = CloneItems(source.Removed)
+    };
+
+    private static RestSiteDecision CloneRestSite(RestSiteDecision source) => new()
+    {
+        Action = source.Action,
+        Target = source.Target == null ? null : CloneItem(source.Target)
+    };
+
+    private static SummaryCounts CloneSummary(SummaryCounts source) => new()
+    {
+        CardsPicked = source.CardsPicked,
+        CardRewardsSkipped = source.CardRewardsSkipped,
+        CardsRemoved = source.CardsRemoved,
+        CardsUpgraded = source.CardsUpgraded,
+        RelicsAcquired = source.RelicsAcquired,
+        ShopsVisited = source.ShopsVisited,
+        ElitesFought = source.ElitesFought
+    };
+
+    private static List<DebriefItem> CloneItems(IEnumerable<DebriefItem> source) =>
+        source.Select(CloneItem).ToList();
+
+    private static DebriefItem CloneItem(DebriefItem source) => new()
+    {
+        Id = source.Id,
+        Name = source.Name,
+        UpgradeCount = source.UpgradeCount
     };
 
     private static RunDebriefLog EnsureRun()
