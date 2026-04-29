@@ -122,7 +122,9 @@ public static class RuntimeHooks
     private static void RecordRunLifecycle(string methodName, object? source, object? firstArg)
     {
         if (methodName.StartsWith("SetUp", StringComparison.Ordinal))
-            DebriefRecorder.BeginRun(source);
+            DebriefRecorder.BeginRun(
+                source,
+                forceNew: methodName.StartsWith("SetUpNew", StringComparison.Ordinal));
         else if (methodName.Equals("EnterRoomInternal", StringComparison.Ordinal))
             DebriefRecorder.EnterRoom(source);
         else if (methodName.Equals("OnEnded", StringComparison.Ordinal))

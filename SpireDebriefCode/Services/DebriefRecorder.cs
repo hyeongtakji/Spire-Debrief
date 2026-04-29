@@ -38,7 +38,7 @@ public static class DebriefRecorder
         }
     }
 
-    public static void BeginRun(object? runSource = null)
+    public static void BeginRun(object? runSource = null, bool forceNew = false)
     {
         lock (Sync)
         {
@@ -46,6 +46,15 @@ public static class DebriefRecorder
             if (matchingLog != null)
             {
                 _active = matchingLog;
+                ReflectionDataExtractor.FillMetadata(_active, runSource);
+                RestoreTransientState(_active);
+                Save();
+                return;
+            }
+
+            if (forceNew)
+            {
+                _active = CreateRun();
                 ReflectionDataExtractor.FillMetadata(_active, runSource);
                 RestoreTransientState(_active);
                 Save();
