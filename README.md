@@ -46,20 +46,21 @@ Exports are saved to:
 
 ## Installation
 
-Spire Debrief depends on BaseLib. Install and enable BaseLib before
-loading this mod.
+Spire Debrief depends on BaseLib. Install and enable
+[BaseLib](https://github.com/Alchyr/BaseLib-StS2) before loading this
+mod.
 
-Copy these two files into the mod folder:
+Download the
+[latest release](https://github.com/hyeongtakji/Spire-Debrief/releases/tag/v0.1.0).
+
+Copy the release files into the mod folder:
 
 ```text
 <Sts2Path>/mods/SpireDebrief/SpireDebrief.dll
 <Sts2Path>/mods/SpireDebrief/SpireDebrief.json
 ```
 
-`SpireDebrief.dll` is produced by the build. `SpireDebrief.json` is the
-manifest at the repository root.
-
-## Build
+## Build From Source
 
 Build with:
 
@@ -73,8 +74,9 @@ The release DLL is written to:
 .godot/mono/temp/bin/Release/SpireDebrief.dll
 ```
 
-The project tries to discover the Slay the Spire 2 install path. If that
-fails, pass the path explicitly:
+The project has default install paths for Windows, Linux, and macOS
+Steam installs. If those defaults do not match your setup, pass the path
+explicitly:
 
 ```sh
 dotnet build -c Release /p:Sts2Path="/path/to/Slay the Spire 2"
