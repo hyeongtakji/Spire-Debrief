@@ -303,11 +303,14 @@ public static class DebriefRecorder
         }
     }
 
-    public static RunDebriefLog CreateExportLog(object? runHistorySource)
+    public static RunDebriefLog? CreateExportLog(object? runHistorySource)
     {
         lock (Sync)
         {
-            RunDebriefLog sourceLog = DebriefStorage.LoadBestMatchingJson(runHistorySource) ?? ActiveOrLatest;
+            RunDebriefLog? sourceLog = DebriefStorage.LoadBestMatchingJson(runHistorySource);
+            if (sourceLog == null)
+                return null;
+
             RunDebriefLog log = CloneRun(sourceLog);
             ReflectionDataExtractor.FillMetadata(log, runHistorySource);
             ReflectionDataExtractor.FillFinalState(log.FinalState, runHistorySource);

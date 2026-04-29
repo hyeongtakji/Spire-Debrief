@@ -92,8 +92,20 @@ public static class RuntimeHooks
     {
         try
         {
-            object? selectedRun = FindSelectedRunObject(screen) ?? screen;
-            RunDebriefLog log = DebriefRecorder.CreateExportLog(selectedRun);
+            object? selectedRun = FindSelectedRunObject(screen);
+            if (selectedRun == null && DebriefStorage.HasUsableIdentity(screen))
+                selectedRun = screen;
+
+            RunDebriefLog? log = selectedRun == null
+                ? null
+                : DebriefRecorder.CreateExportLog(selectedRun);
+            if (log == null)
+            {
+                button.Text = "Select Run First";
+                MainFile.Logger.Warn("Export Debrief skipped because no matching selected run could be found.");
+                return;
+            }
+
             string markdown = MarkdownRenderer.Render(log);
             ExportResult result = DebriefStorage.ExportMarkdown(log, markdown);
 
