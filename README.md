@@ -46,6 +46,9 @@ Exports are saved to:
 
 ## Installation
 
+Spire Debrief depends on BaseLib. Install and enable BaseLib before
+loading this mod.
+
 Copy these two files into the mod folder:
 
 ```text
