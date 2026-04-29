@@ -1,43 +1,87 @@
 # Spire Debrief
 
-Spire Debrief is a Slay the Spire 2 mod MVP that exports run history
-as a post-run Markdown debrief suitable for pasting into an LLM.
+Spire Debrief is a Slay the Spire 2 mod that exports a completed run as
+LLM-friendly Markdown for post-run review.
 
-## Current Strategy
+The mod adds one `Export Debrief` button to `Compendium > Run History`.
+When clicked, it reads the run currently loaded by the game's run history
+screen, renders a Markdown debrief, copies it to the clipboard when
+possible, and saves it under the installed mod folder.
 
-This repository started as an empty Git repo, so there were no existing mod files or game API wrappers to patch. The scaffold follows the public Slay the Spire 2 C# Godot/BaseLib mod shape:
+Spire Debrief does not record turn-by-turn combat details and does not
+log decisions while a run is in progress. It uses the game's saved
+`RunHistory` data after the run appears in Run History.
 
-- `[ModInitializer]` entry point in `SpireDebriefCode/MainFile.cs`
-- Harmony runtime patches installed by `SpireDebriefCode/Hooks/ReflectionHookInstaller.cs`
-- Defensive screen injection for the compendium run history screen only
-- Markdown export from the game's saved `RunHistory` object
-- Markdown rendered only when the user exports
+## Exported Data
 
-The hook installer discovers loaded game types at runtime, but it only
-patches the run history screen. The current MVP hook is:
+The Markdown export includes:
 
-- Export UI: `RunHistoryScreen.NRunHistory` `_Ready`/screen resize hooks
+- Run metadata: character, ascension, seed, game version, mod version,
+  date, result, and final location
+- Final state: HP, gold, potions, final deck, and relics
+- Floor-by-floor history: room type, encounter, damage taken when
+  available, card choices, picked/skipped rewards, relics, potions,
+  event choices, shop purchases/removals, and rest-site choices
+- Summary counts for picked cards, skipped card rewards, removals,
+  upgrades, relics acquired, shops, and elites
+- A ready-to-paste review prompt
 
-If no run history is loaded on the screen, export fails with a logged
-warning. The mod does not record anything while a run is in progress.
+If the run history screen does not have a loaded `RunHistory` object,
+export fails and the button changes to `Export Failed`.
+
+## Usage
+
+1. Install the mod.
+2. Open Slay the Spire 2.
+3. Go to `Compendium > Run History`.
+4. Navigate to the run you want to review.
+5. Click `Export Debrief`.
+6. Paste the copied Markdown into an LLM, or open the saved `.md` file.
+
+Exports are saved to:
+
+```text
+<Sts2Path>/mods/SpireDebrief/exports/
+```
+
+## Installation
+
+Copy these two files into the mod folder:
+
+```text
+<Sts2Path>/mods/SpireDebrief/SpireDebrief.dll
+<Sts2Path>/mods/SpireDebrief/SpireDebrief.json
+```
+
+`SpireDebrief.dll` is produced by the build. `SpireDebrief.json` is the
+manifest at the repository root.
 
 ## Build
 
-Install the public StS2 mod template prerequisites, then build with the game installed:
+Build with:
 
 ```sh
-dotnet build
+dotnet build -c Release
 ```
 
-Override the game path if auto-discovery cannot find it:
+The release DLL is written to:
+
+```text
+.godot/mono/temp/bin/Release/SpireDebrief.dll
+```
+
+The project tries to discover the Slay the Spire 2 install path. If that
+fails, pass the path explicitly:
 
 ```sh
-dotnet build /p:Sts2Path="/path/to/Slay the Spire 2"
+dotnet build -c Release /p:Sts2Path="/path/to/Slay the Spire 2"
 ```
 
-Or copy `local.props.template` to `local.props` and set `Sts2Path`.
-When building from WSL against a Windows Steam install, also set
-`Sts2DataDir` to the Windows data directory:
+You can also copy `local.props.template` to `local.props` and set local
+paths there. `local.props` is ignored by Git.
+
+When building from WSL against a Windows Steam install, set both
+`Sts2Path` and `Sts2DataDir`:
 
 ```xml
 <Project>
@@ -48,19 +92,9 @@ When building from WSL against a Windows Steam install, also set
 </Project>
 ```
 
-To install manually, copy the built `SpireDebrief.dll` and the root
-`SpireDebrief.json` manifest into:
+## Development Notes
 
-```text
-<Sts2Path>/mods/SpireDebrief/
-```
-
-## Output
-
-Exports are written under the installed mod folder:
-
-```text
-<Sts2Path>/mods/SpireDebrief/exports/*.md
-```
-
-The export button also attempts to copy Markdown to the clipboard.
+The runtime patch is intentionally narrow. It only patches the run
+history screen so it can add the export button. Export data comes from
+the game's loaded `RunHistory`; there are no card reward, event, shop,
+rest-site, combat, or run lifecycle hooks.
