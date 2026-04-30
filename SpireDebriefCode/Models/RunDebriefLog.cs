@@ -43,7 +43,13 @@ public sealed class FloorLog
     public string RoomType { get; set; } = "Unknown";
     public string? Encounter { get; set; }
     public string? PathingChoice { get; set; }
+    public int? CurrentHp { get; set; }
+    public int? MaxHp { get; set; }
+    public int? Gold { get; set; }
+    public int? TurnsTaken { get; set; }
     public int? DamageTaken { get; set; }
+    public List<DebriefItem> CardsGained { get; set; } = [];
+    public List<DebriefItem> CardsRemoved { get; set; } = [];
     public List<CardRewardDecision> CardRewards { get; set; } = [];
     public List<DebriefItem> RelicRewards { get; set; } = [];
     public List<DebriefItem> PotionRewards { get; set; } = [];

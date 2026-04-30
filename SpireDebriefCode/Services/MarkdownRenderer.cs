@@ -68,6 +68,9 @@ public static class MarkdownRenderer
         {
             md.AppendLine($"### Floor {floor.Floor} - {Escape(floor.RoomType)}");
             AppendBullet(md, "Encounter", floor.Encounter);
+            AppendBullet(md, "HP", FormatHp(floor.CurrentHp, floor.MaxHp));
+            AppendBullet(md, "Gold", floor.Gold?.ToString());
+            AppendBullet(md, "Turns Taken", floor.TurnsTaken?.ToString());
             AppendBullet(md, "Damage Taken", floor.DamageTaken?.ToString());
             AppendBullet(md, "Pathing", floor.PathingChoice);
 
@@ -89,6 +92,10 @@ public static class MarkdownRenderer
                 AppendInlineItems(md, "Relic rewards", floor.RelicRewards);
             if (floor.PotionRewards.Count > 0)
                 AppendInlineItems(md, "Potion rewards", floor.PotionRewards);
+            if (floor.CardsGained.Count > 0)
+                AppendInlineItems(md, "Cards gained", floor.CardsGained);
+            if (floor.CardsRemoved.Count > 0 && (floor.Shop?.Removed.Count ?? 0) != floor.CardsRemoved.Count)
+                AppendInlineItems(md, "Cards removed", floor.CardsRemoved);
             if (floor.Event != null)
                 AppendEvent(md, floor.Event);
             if (floor.Shop != null)
@@ -171,6 +178,9 @@ public static class MarkdownRenderer
         if (!string.IsNullOrWhiteSpace(meta.FinalRoom)) location = location == null ? meta.FinalRoom : $"{location}, {meta.FinalRoom}";
         return location ?? meta.EndedAt ?? string.Empty;
     }
+
+    private static string? FormatHp(int? currentHp, int? maxHp) =>
+        currentHp.HasValue || maxHp.HasValue ? $"{currentHp?.ToString() ?? "?"}/{maxHp?.ToString() ?? "?"}" : null;
 
     private static string Escape(string value) =>
         value.Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal).Trim();

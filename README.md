@@ -19,9 +19,10 @@ The Markdown export includes:
 - Run metadata: character, ascension, seed, game version, mod version,
   date, result, and final location
 - Final state: HP, gold, potions, final deck, and relics
-- Floor-by-floor history: room type, encounter, damage taken when
-  available, card choices, picked/skipped rewards, relics, potions,
-  event choices, shop purchases/removals, and rest-site choices
+- Floor-by-floor history: room type, encounter, ending HP, ending gold,
+  combat turns, damage taken when available, card choices,
+  picked/skipped rewards, extra card gains, card removals, relics,
+  potions, event choices, shop purchases/removals, and rest-site choices
 - Summary counts for picked cards, skipped card rewards, removals,
   upgrades, relics acquired, shops, and elites
 - A ready-to-paste review prompt

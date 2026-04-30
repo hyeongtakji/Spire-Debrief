@@ -112,6 +112,10 @@ public static class RunHistoryDebriefFactory
             Floor = floorNumber,
             RoomType = roomType,
             Encounter = ResolveEncounter(room),
+            TurnsTaken = room?.TurnsTaken > 0 ? room.TurnsTaken : null,
+            CurrentHp = stats?.CurrentHp,
+            MaxHp = stats?.MaxHp,
+            Gold = stats?.CurrentGold,
             DamageTaken = stats?.DamageTaken > 0 ? stats.DamageTaken : null
         };
 
@@ -119,7 +123,9 @@ public static class RunHistoryDebriefFactory
             return floor;
 
         AddCardChoices(floor, stats);
+        AddCardGains(floor, stats);
         AddRewards(floor, stats);
+        AddCardRemovals(floor, stats);
         AddEvent(floor, point, room, stats);
         AddShop(floor, stats);
         AddRestSite(floor, stats);
@@ -146,6 +152,29 @@ public static class RunHistoryDebriefFactory
             floor.CardRewards.Add(reward);
     }
 
+    private static void AddCardGains(FloorLog floor, PlayerMapPointHistoryEntry stats)
+    {
+        if (floor.RoomType.Equals("Shop", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        HashSet<string> representedPickedCards = stats.CardChoices
+            .Where(choice => choice.wasPicked)
+            .Select(choice => CardKey(choice.Card))
+            .WhereText()
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (SerializableCard card in stats.CardsGained)
+        {
+            string? key = CardKey(card);
+            if (key != null && representedPickedCards.Remove(key))
+                continue;
+
+            DebriefItem? item = ToCardItem(card);
+            if (item != null)
+                floor.CardsGained.Add(item);
+        }
+    }
+
     private static void AddRewards(FloorLog floor, PlayerMapPointHistoryEntry stats)
     {
         foreach (ModelChoiceHistoryEntry choice in stats.RelicChoices.Where(choice => choice.wasPicked))
@@ -161,6 +190,11 @@ public static class RunHistoryDebriefFactory
             if (item != null)
                 floor.PotionRewards.Add(item);
         }
+    }
+
+    private static void AddCardRemovals(FloorLog floor, PlayerMapPointHistoryEntry stats)
+    {
+        floor.CardsRemoved.AddRange(stats.CardsRemoved.Select(ToCardItem).WhereNotNull());
     }
 
     private static void AddEvent(
@@ -198,18 +232,18 @@ public static class RunHistoryDebriefFactory
 
     private static void AddShop(FloorLog floor, PlayerMapPointHistoryEntry stats)
     {
+        bool isShopRoom = floor.RoomType.Equals("Shop", StringComparison.OrdinalIgnoreCase);
         List<DebriefItem> purchased = [];
-        if (floor.RoomType.Equals("Shop", StringComparison.OrdinalIgnoreCase))
+        if (isShopRoom)
             purchased.AddRange(stats.CardsGained.Select(ToCardItem).WhereNotNull());
         purchased.AddRange(stats.BoughtColorless.Select(ToCardItem).WhereNotNull());
         purchased.AddRange(stats.BoughtRelics.Select(ToRelicItem).WhereNotNull());
         purchased.AddRange(stats.BoughtPotions.Select(ToPotionItem).WhereNotNull());
 
-        List<DebriefItem> removed = stats.CardsRemoved.Select(ToCardItem).WhereNotNull().ToList();
+        List<DebriefItem> removed = isShopRoom ? floor.CardsRemoved.ToList() : [];
         if (purchased.Count == 0 && removed.Count == 0)
             return;
 
-        floor.RoomType = "Shop";
         floor.Shop = new ShopDecision
         {
             Purchased = purchased,
@@ -242,7 +276,7 @@ public static class RunHistoryDebriefFactory
         {
             CardsPicked = log.Floors.SelectMany(f => f.CardRewards).Count(r => r.Picked != null),
             CardRewardsSkipped = log.Floors.SelectMany(f => f.CardRewards).Count(r => r.Skipped),
-            CardsRemoved = log.Floors.Sum(f => f.Shop?.Removed.Count ?? 0),
+            CardsRemoved = log.Floors.Sum(f => f.CardsRemoved.Count),
             CardsUpgraded = history.MapPointHistory.SelectMany(act => act)
                 .Select(GetPlayerStats)
                 .WhereNotNull()
@@ -291,6 +325,9 @@ public static class RunHistoryDebriefFactory
             UpgradeCount = card.CurrentUpgradeLevel > 0 ? card.CurrentUpgradeLevel : null
         };
     }
+
+    private static string? CardKey(SerializableCard card) =>
+        card.Id == null ? null : $"{card.Id}:{card.CurrentUpgradeLevel}";
 
     private static DebriefItem? ToCardItem(ModelId id)
     {
