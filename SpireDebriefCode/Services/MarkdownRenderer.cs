@@ -18,6 +18,7 @@ public static class MarkdownRenderer
         AppendItems(md, "Final Deck", log.FinalState.Deck);
         AppendItems(md, "Relics", log.FinalState.Relics);
         AppendRunLog(md, log.Floors);
+        AppendPathing(md, log.Pathing);
         AppendSummaryCounts(md, log.Summary);
         AppendReviewPrompt(md);
         return md.ToString();
@@ -61,6 +62,92 @@ public static class MarkdownRenderer
         }
         md.AppendLine();
     }
+
+    private static void AppendPathChoices(StringBuilder md, PathingLog pathing)
+    {
+        md.AppendLine("### Path Choices");
+        md.AppendLine();
+
+        foreach (PathChoiceLog choice in pathing.Choices.OrderBy(choice => choice.Floor))
+        {
+            md.AppendLine($"#### Floor {choice.Floor}");
+            AppendBullet(md, "From", choice.FromNodeId);
+            if (choice.AvailableNodeIds.Count > 0)
+            {
+                md.AppendLine("- Available:");
+                foreach (string nodeId in choice.AvailableNodeIds)
+                    md.AppendLine($"  - {Escape(FormatNodeLabel(pathing, choice, nodeId))}");
+            }
+            AppendBullet(md, "Chosen", FormatChosenNode(choice));
+
+            if (choice.OptionSummaries.Count > 0)
+            {
+                md.AppendLine("- Option summaries:");
+                foreach (PathOptionSummary option in choice.OptionSummaries)
+                    md.AppendLine($"  - {Escape(FormatOptionSummary(option))}");
+            }
+
+            if (choice.Ranks != null)
+            {
+                List<string> ranks = [];
+                AddRank(ranks, "most_elites", choice.Ranks.ChosenRankByMostElites);
+                AddRank(ranks, "fewest_elites", choice.Ranks.ChosenRankByFewestElites);
+                AddRank(ranks, "most_rests", choice.Ranks.ChosenRankByMostRestSites);
+                AddRank(ranks, "shortest_rest", choice.Ranks.ChosenRankByShortestRestDistance);
+                AddRank(ranks, "path_count", choice.Ranks.ChosenRankByPathCount);
+                if (ranks.Count > 0)
+                    md.AppendLine($"- Chosen ranks: {string.Join(", ", ranks)}");
+            }
+
+            md.AppendLine();
+        }
+    }
+
+    private static string FormatChosenNode(PathChoiceLog choice)
+    {
+        if (string.IsNullOrWhiteSpace(choice.ChosenNodeId))
+            return string.Empty;
+        return string.IsNullOrWhiteSpace(choice.ChosenNodeType)
+            ? choice.ChosenNodeId
+            : $"{choice.ChosenNodeId} {choice.ChosenNodeType}";
+    }
+
+    private static string FormatNodeLabel(PathingLog pathing, PathChoiceLog choice, string nodeId)
+    {
+        string? type = choice.OptionSummaries.FirstOrDefault(option => option.NodeId.Equals(nodeId, StringComparison.Ordinal))?.NodeType
+            ?? pathing.Acts.SelectMany(act => act.Nodes).FirstOrDefault(node => node.Id.Equals(nodeId, StringComparison.Ordinal))?.MapPointType;
+        return string.IsNullOrWhiteSpace(type) ? nodeId : $"{nodeId} {type}";
+    }
+
+    private static string FormatOptionSummary(PathOptionSummary option)
+    {
+        string node = string.IsNullOrWhiteSpace(option.NodeType)
+            ? option.NodeId
+            : $"{option.NodeId} {option.NodeType}";
+        return $"{node}: paths_to_boss={option.ReachablePathCount}, " +
+            $"elites=min{option.MinElitesReachable}/max{option.MaxElitesReachable}, " +
+            $"monsters=min{option.MinMonstersReachable}/max{option.MaxMonstersReachable}, " +
+            $"rests=min{option.MinRestSitesReachable}/max{option.MaxRestSitesReachable}, " +
+            $"shops=min{option.MinShopsReachable}/max{option.MaxShopsReachable}, " +
+            $"treasures=min{option.MinTreasuresReachable}/max{option.MaxTreasuresReachable}, " +
+            $"unknowns=min{option.MinUnknownsReachable}/max{option.MaxUnknownsReachable}, " +
+            $"events=min{option.MinEventsReachable}/max{option.MaxEventsReachable}, " +
+            $"elite_forced={option.EliteForced.ToString().ToLowerInvariant()}, " +
+            $"rest_reachable={option.RestSiteReachable.ToString().ToLowerInvariant()}, " +
+            $"nearest_rest={FormatNullable(option.NearestRestDistance)}, " +
+            $"nearest_shop={FormatNullable(option.NearestShopDistance)}, " +
+            $"nearest_elite={FormatNullable(option.NearestEliteDistance)}, " +
+            $"flexibility={option.PathFlexibilityScore}";
+    }
+
+    private static void AddRank(List<string> ranks, string label, int? rank)
+    {
+        if (rank.HasValue)
+            ranks.Add($"{label}=#{rank.Value}");
+    }
+
+    private static string FormatNullable(int? value) =>
+        value?.ToString() ?? "null";
 
     private static void AppendRunLog(StringBuilder md, IReadOnlyList<FloorLog> floors)
     {
@@ -152,6 +239,69 @@ public static class MarkdownRenderer
         md.AppendLine();
     }
 
+    private static void AppendPathing(StringBuilder md, PathingLog? pathing)
+    {
+        if (pathing == null)
+            return;
+
+        md.AppendLine("## Pathing Analysis Data");
+        md.AppendLine();
+        md.AppendLine($"Source: {Escape(pathing.Source)}");
+        md.AppendLine();
+        if (!string.IsNullOrWhiteSpace(pathing.Note))
+        {
+            md.AppendLine(Escape(pathing.Note));
+            md.AppendLine();
+        }
+        if (AllCoordinatesMissing(pathing.ActualPath))
+        {
+            md.AppendLine("Coordinates: not captured for this export.");
+            md.AppendLine();
+        }
+
+        md.AppendLine("### Actual Path");
+        if (pathing.ActualPath.Count == 0)
+        {
+            md.AppendLine("- Not captured");
+        }
+        else
+        {
+            foreach (ActualPathStepLog step in pathing.ActualPath.OrderBy(step => step.Floor))
+                md.AppendLine($"- {FormatActualPathStep(step)}");
+        }
+        md.AppendLine();
+
+        if (pathing.Choices.Count > 0)
+            AppendPathChoices(md, pathing);
+
+        if (pathing.Source.Equals("live_telemetry", StringComparison.OrdinalIgnoreCase) ||
+            pathing.Acts.Count > 0 ||
+            pathing.Choices.Count > 0)
+        {
+            md.AppendLine("### Structured Pathing JSON");
+            md.AppendLine();
+            md.AppendLine("```json");
+            md.AppendLine(PathingJsonSerializer.Serialize(pathing));
+            md.AppendLine("```");
+            md.AppendLine();
+        }
+    }
+
+    private static string FormatActualPathStep(ActualPathStepLog step)
+    {
+        string roomType = FirstText(step.MapPointType, step.RoomType, "Unknown");
+        if (!string.IsNullOrWhiteSpace(step.NodeId))
+            return $"Floor {step.Floor}: chose {Escape(roomType)} at {Escape(step.NodeId)}";
+        if (!string.IsNullOrWhiteSpace(step.Coordinate))
+            return $"Floor {step.Floor}: chose {Escape(roomType)} at {Escape(step.Coordinate)}";
+        return $"Floor {step.Floor}: {Escape(roomType)}";
+    }
+
+    private static bool AllCoordinatesMissing(IReadOnlyList<ActualPathStepLog> steps) =>
+        steps.Count > 0 &&
+        steps.All(step => string.IsNullOrWhiteSpace(step.NodeId) &&
+            string.IsNullOrWhiteSpace(step.Coordinate));
+
     private static void AppendReviewPrompt(StringBuilder md)
     {
         md.AppendLine("## Review Prompt");
@@ -192,4 +342,7 @@ public static class MarkdownRenderer
 
     private static string Escape(string value) =>
         value.Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal).Trim();
+
+    private static string FirstText(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
 }

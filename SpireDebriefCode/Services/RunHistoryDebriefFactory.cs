@@ -20,12 +20,14 @@ public static class RunHistoryDebriefFactory
             return false;
 
         RunHistoryPlayer player = ResolveSelectedPlayer(source, history);
+        List<FloorLog> floors = BuildFloors(history, player);
         log = new RunDebriefLog
         {
             RunId = $"history-{history.StartTime}-{player.Id}",
             Metadata = BuildMetadata(history, player, modVersion),
             FinalState = BuildFinalState(history, player),
-            Floors = BuildFloors(history, player)
+            Floors = floors,
+            Pathing = BuildPathing(history, floors)
         };
         log.Summary = BuildSummary(history, player, log);
         return true;
@@ -98,6 +100,45 @@ public static class RunHistoryDebriefFactory
         }
 
         return floors;
+    }
+
+    private static PathingLog BuildPathing(RunHistory history, IReadOnlyList<FloorLog> floors)
+    {
+        PathingLog pathing = new()
+        {
+            Source = "run_history_only",
+            Note = "Old RunHistory data may not include node coordinates or full alternative-route map data. Full alternative-route analysis requires live telemetry captured during a run."
+        };
+
+        int floorNumber = 1;
+        int floorIndex = 0;
+        for (int actIndex = 0; actIndex < history.MapPointHistory.Count; actIndex++)
+        {
+            foreach (MapPointHistoryEntry point in history.MapPointHistory[actIndex])
+            {
+                MapPointRoomHistoryEntry? room = point.Rooms.LastOrDefault();
+                string roomType = NormalizeRoomType(room?.RoomType.ToString() ?? point.MapPointType.ToString());
+                string mapPointType = NormalizeRoomType(point.MapPointType.ToString());
+                string summary = FormatPathingChoice(mapPointType, null);
+
+                pathing.ActualPath.Add(new ActualPathStepLog
+                {
+                    Floor = floorNumber,
+                    ActIndex = actIndex + 1,
+                    MapPointType = mapPointType,
+                    RoomType = roomType,
+                    PathingChoiceSummary = summary
+                });
+
+                if (floorIndex < floors.Count)
+                    floors[floorIndex].PathingChoice = summary;
+
+                floorNumber++;
+                floorIndex++;
+            }
+        }
+
+        return pathing;
     }
 
     private static FloorLog BuildFloor(
@@ -397,6 +438,11 @@ public static class RunHistoryDebriefFactory
             "HEAL" => "Rest",
             _ => action
         };
+
+    internal static string FormatPathingChoice(string roomType, string? nodeId) =>
+        string.IsNullOrWhiteSpace(nodeId)
+            ? $"chose {roomType}"
+            : $"chose {roomType} at {nodeId}";
 
     private static string FormatStartTime(long startTime)
     {
