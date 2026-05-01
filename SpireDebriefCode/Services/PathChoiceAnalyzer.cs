@@ -46,7 +46,7 @@ public static class PathChoiceAnalyzer
     private static PathOptionSummary AnalyzeOption(Graph graph, string nodeId)
     {
         PathRange range = CountRanges(graph, nodeId, [], []);
-        return new PathOptionSummary
+        PathOptionSummary summary = new()
         {
             NodeId = nodeId,
             NodeType = graph.Nodes[nodeId].MapPointType,
@@ -66,12 +66,35 @@ public static class PathChoiceAnalyzer
             MinEventsReachable = range.Min.Events,
             MaxEventsReachable = range.Max.Events,
             EliteForced = range.Min.Elites > 0,
+            ImmediateRest = IsRest(graph.Nodes[nodeId].MapPointType) ? true : null,
+            ForcedFollowUp = ForcedFollowUp(graph, nodeId),
             RestSiteReachable = range.Max.RestSites > 0,
             NearestRestDistance = NearestDistance(graph, nodeId, "Rest"),
             NearestShopDistance = NearestDistance(graph, nodeId, "Shop"),
             NearestEliteDistance = NearestDistance(graph, nodeId, "Elite"),
             PathFlexibilityScore = CountReachableNodes(graph, nodeId, [])
         };
+        summary.RiskNote = BuildRiskNote(summary, null);
+        return summary;
+    }
+
+    public static void ApplyRuntimeContext(
+        IReadOnlyList<PathOptionSummary> summaries,
+        PlayerStateSnapshot? playerState)
+    {
+        foreach (PathOptionSummary summary in summaries)
+        {
+            if (IsUnknown(summary.NodeType) && playerState?.UnknownRoomOdds != null)
+            {
+                bool combatPossible = (playerState.UnknownRoomOdds.MonsterOdds ?? 0f) > 0f;
+                summary.UnknownCombatPossible = combatPossible;
+                summary.UnknownCombatReason = combatPossible
+                    ? $"Live unknown-room odds before this choice reported MonsterOdds={FormatOdds(playerState.UnknownRoomOdds.MonsterOdds)}."
+                    : $"Live unknown-room odds before this choice reported MonsterOdds={FormatOdds(playerState.UnknownRoomOdds.MonsterOdds)}, so normal combat was not in the current unknown-room roll table.";
+            }
+
+            summary.RiskNote = BuildRiskNote(summary, playerState);
+        }
     }
 
     private static int CountPaths(
@@ -166,6 +189,29 @@ public static class PathChoiceAnalyzer
         return null;
     }
 
+    private static List<string> ForcedFollowUp(Graph graph, string nodeId)
+    {
+        List<string> followUp = [];
+        string current = nodeId;
+        HashSet<string> visited = [nodeId];
+
+        while (true)
+        {
+            IReadOnlyList<string> children = graph.Children(current);
+            if (children.Count != 1)
+                break;
+
+            string child = children[0];
+            if (!visited.Add(child))
+                break;
+
+            followUp.Add(FormatNodeStep(graph.Nodes[child]));
+            current = child;
+        }
+
+        return followUp;
+    }
+
     private static int CountReachableNodes(Graph graph, string nodeId, HashSet<string> visited)
     {
         if (!visited.Add(nodeId))
@@ -179,6 +225,45 @@ public static class PathChoiceAnalyzer
 
     private static bool IsBoss(Graph graph, string nodeId) =>
         graph.Nodes[nodeId].MapPointType.Equals("Boss", StringComparison.OrdinalIgnoreCase);
+
+    private static string BuildRiskNote(PathOptionSummary option, PlayerStateSnapshot? playerState)
+    {
+        if (option.ImmediateRest == true && option.EliteForced && option.NearestEliteDistance == 1)
+            return "Rest now, but this line commits to an elite shortly after.";
+
+        if (option.UnknownCombatPossible == false)
+            return "Unknown is safer than normal because live telemetry reports normal combat was not possible in ? rooms before this choice.";
+
+        if (option.EliteForced && option.NearestRestDistance is > 1 or null)
+            return "This line has a forced elite before a nearby rest site is guaranteed.";
+
+        if (IsLowHp(playerState) && option.NearestRestDistance is > 1)
+            return $"Low HP and nearest rest is {option.NearestRestDistance} nodes away on this line.";
+
+        if (option.ForcedFollowUp.Count > 0 && option.EliteForced)
+            return "This option has forced follow-up before the next branch; judge the whole sequence, not only the immediate node.";
+
+        return string.Empty;
+    }
+
+    private static bool IsLowHp(PlayerStateSnapshot? playerState) =>
+        playerState?.CurrentHp != null &&
+        playerState.MaxHp is > 0 &&
+        playerState.CurrentHp.Value <= Math.Max(15, (int)Math.Ceiling(playerState.MaxHp.Value * 0.3));
+
+    private static string FormatNodeStep(PathNodeLog node) =>
+        string.IsNullOrWhiteSpace(node.MapPointType)
+            ? node.Id
+            : $"{node.Id} {node.MapPointType}";
+
+    private static string FormatOdds(float? odds) =>
+        odds.HasValue ? odds.Value.ToString("0.###") : "unknown";
+
+    private static bool IsRest(string? type) =>
+        Is(type, "Rest") || Is(type, "RestSite");
+
+    private static bool IsUnknown(string? type) =>
+        Is(type, "Unknown");
 
     private static int RankDescending(
         IReadOnlyList<PathOptionSummary> summaries,
@@ -298,4 +383,8 @@ public static class PathChoiceAnalyzer
         private static bool Is(string value, string expected) =>
             value.Equals(expected, StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool Is(string? value, string expected) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        value.Equals(expected, StringComparison.OrdinalIgnoreCase);
 }

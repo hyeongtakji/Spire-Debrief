@@ -1,5 +1,7 @@
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 using SpireDebrief.SpireDebriefCode.Models;
 
@@ -216,7 +218,9 @@ public static class PathTelemetryService
 
         ActPathGraphSnapshot? graph = _current.Acts.FirstOrDefault(act => act.ActIndex == actIndex)
             ?? PathGraphExtractor.Extract(runState, DateTimeOffset.Now);
+        PlayerStateSnapshot? playerStateBefore = CapturePlayerState(runState);
         List<PathOptionSummary> optionSummaries = PathChoiceAnalyzer.AnalyzeOptions(graph, availableNodeIds);
+        PathChoiceAnalyzer.ApplyRuntimeContext(optionSummaries, playerStateBefore);
 
         PathChoiceLog choice = new()
         {
@@ -228,7 +232,7 @@ public static class PathTelemetryService
             AvailableNodeIds = availableNodeIds,
             ChosenNodeId = chosenNodeId,
             ChosenNodeType = chosenType,
-            PlayerStateBefore = CapturePlayerState(runState),
+            PlayerStateBefore = playerStateBefore,
             OptionSummaries = optionSummaries,
             Ranks = PathChoiceAnalyzer.CalculateRanks(optionSummaries, chosenNodeId)
         };
@@ -308,7 +312,9 @@ public static class PathTelemetryService
                 MaxHp = player.Creature?.MaxHp,
                 Gold = player.Gold,
                 DeckSize = player.Deck?.Cards.Count,
-                RelicCount = player.Relics?.Count
+                RelicCount = player.Relics?.Count,
+                Relics = player.Relics?.Select(ToRelicItem).WhereNotNull().ToList() ?? [],
+                UnknownRoomOdds = CaptureUnknownRoomOdds(runState)
             };
         }
         catch
@@ -316,6 +322,40 @@ public static class PathTelemetryService
             return null;
         }
     }
+
+    private static UnknownRoomOddsSnapshot? CaptureUnknownRoomOdds(RunState runState)
+    {
+        try
+        {
+            return new UnknownRoomOddsSnapshot
+            {
+                MonsterOdds = runState.Odds?.UnknownMapPoint?.MonsterOdds,
+                EliteOdds = runState.Odds?.UnknownMapPoint?.EliteOdds,
+                EventOdds = runState.Odds?.UnknownMapPoint?.EventOdds,
+                ShopOdds = runState.Odds?.UnknownMapPoint?.ShopOdds,
+                TreasureOdds = runState.Odds?.UnknownMapPoint?.TreasureOdds
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static DebriefItem? ToRelicItem(RelicModel relic)
+    {
+        if (relic.Id == null)
+            return null;
+
+        return new DebriefItem
+        {
+            Id = relic.Id.ToString(),
+            Name = Text(relic.Title) ?? relic.Id.ToString()
+        };
+    }
+
+    private static string? Text(LocString? locString) =>
+        locString?.GetFormattedText() ?? locString?.GetRawText();
 
     private static void Persist()
     {

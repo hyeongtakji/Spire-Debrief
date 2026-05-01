@@ -90,6 +90,7 @@ public static class PathingJsonSerializer
             choice.AvailableNodeIds,
             choice.ChosenNodeId,
             choice.ChosenNodeType,
+            choice.ResolvedRoomType,
             choice.PlayerStateBefore,
             choice.PlayerStateAfter,
             OptionSummaries = choice.OptionSummaries.Select(ToCompactOptionSummary),
@@ -103,7 +104,8 @@ public static class PathingJsonSerializer
             choice.ActIndex,
             choice.FromNodeId,
             choice.ChosenNodeId,
-            choice.ChosenNodeType
+            choice.ChosenNodeType,
+            choice.ResolvedRoomType
         };
 
     private static object ToCompactOptionSummary(PathOptionSummary option) =>
@@ -116,9 +118,14 @@ public static class PathingJsonSerializer
             Rests = new { Min = option.MinRestSitesReachable, Max = option.MaxRestSitesReachable },
             Shops = new { Min = option.MinShopsReachable, Max = option.MaxShopsReachable },
             option.EliteForced,
+            option.ImmediateRest,
+            option.UnknownCombatPossible,
+            option.UnknownCombatReason,
+            option.ForcedFollowUp,
             option.NearestRestDistance,
             option.NearestShopDistance,
             option.NearestEliteDistance,
+            option.RiskNote,
             Flexibility = option.PathFlexibilityScore
         };
 

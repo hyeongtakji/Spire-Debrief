@@ -9,6 +9,7 @@ public sealed class RunDebriefLog
     public List<FloorLog> Floors { get; set; } = [];
     public SummaryCounts Summary { get; set; } = new();
     public PathingLog? Pathing { get; set; }
+    public List<string> ExportLimitations { get; set; } = [];
 }
 
 public sealed class RunMetadata
@@ -54,10 +55,24 @@ public sealed class FloorLog
     public List<CardRewardDecision> CardRewards { get; set; } = [];
     public List<DebriefItem> RelicRewards { get; set; } = [];
     public List<DebriefItem> PotionRewards { get; set; } = [];
+    public List<DebriefItem> PotionsUsed { get; set; } = [];
+    public List<DebriefItem> PotionsDiscarded { get; set; } = [];
+    public List<CardInstanceChangeLog> CardInstanceChanges { get; set; } = [];
     public EventDecision? Event { get; set; }
     public ShopDecision? Shop { get; set; }
     public RestSiteDecision? RestSite { get; set; }
     public List<string> Notes { get; set; } = [];
+}
+
+public sealed class CardInstanceChangeLog
+{
+    public int Floor { get; set; }
+    public DebriefItem? CardBefore { get; set; }
+    public DebriefItem? CardAfter { get; set; }
+    public string ChangeKind { get; set; } = "modified";
+    public string Description { get; set; } = string.Empty;
+    public bool IsUpgrade { get; set; }
+    public bool IsUncertain { get; set; }
 }
 
 public sealed class CardRewardDecision
@@ -158,6 +173,7 @@ public sealed class PathChoiceLog
     public List<string> AvailableNodeIds { get; set; } = [];
     public string? ChosenNodeId { get; set; }
     public string? ChosenNodeType { get; set; }
+    public string? ResolvedRoomType { get; set; }
     public PlayerStateSnapshot? PlayerStateBefore { get; set; }
     public PlayerStateSnapshot? PlayerStateAfter { get; set; }
     public List<PathOptionSummary> OptionSummaries { get; set; } = [];
@@ -184,6 +200,11 @@ public sealed class PathOptionSummary
     public int MinEventsReachable { get; set; }
     public int MaxEventsReachable { get; set; }
     public bool EliteForced { get; set; }
+    public bool? ImmediateRest { get; set; }
+    public bool? UnknownCombatPossible { get; set; }
+    public string? UnknownCombatReason { get; set; }
+    public List<string> ForcedFollowUp { get; set; } = [];
+    public string? RiskNote { get; set; }
     public bool RestSiteReachable { get; set; }
     public int? NearestRestDistance { get; set; }
     public int? NearestShopDistance { get; set; }
@@ -207,6 +228,17 @@ public sealed class PlayerStateSnapshot
     public int? Gold { get; set; }
     public int? DeckSize { get; set; }
     public int? RelicCount { get; set; }
+    public List<DebriefItem> Relics { get; set; } = [];
+    public UnknownRoomOddsSnapshot? UnknownRoomOdds { get; set; }
+}
+
+public sealed class UnknownRoomOddsSnapshot
+{
+    public float? MonsterOdds { get; set; }
+    public float? EliteOdds { get; set; }
+    public float? EventOdds { get; set; }
+    public float? ShopOdds { get; set; }
+    public float? TreasureOdds { get; set; }
 }
 
 public sealed class PathingTelemetryRun

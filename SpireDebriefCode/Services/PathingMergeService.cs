@@ -67,7 +67,7 @@ public static class PathingMergeService
             }
         }
 
-        return new PathingLog
+        PathingLog log = new()
         {
             SchemaVersion = 1,
             Source = "live_telemetry",
@@ -76,6 +76,26 @@ public static class PathingMergeService
             Acts = acts.Values.ToList(),
             Choices = choices.Values.ToList()
         };
+        AttachResolvedRoomTypes(log);
+        return log;
+    }
+
+    private static void AttachResolvedRoomTypes(PathingLog log)
+    {
+        Dictionary<int, ActualPathStepLog> actualPathByFloor = log.ActualPath
+            .Where(step => step.Floor > 0)
+            .GroupBy(step => step.Floor)
+            .ToDictionary(group => group.Key, group => group.Last());
+
+        foreach (PathChoiceLog choice in log.Choices)
+        {
+            if (!actualPathByFloor.TryGetValue(choice.Floor, out ActualPathStepLog? step))
+                continue;
+
+            choice.ResolvedRoomType = step.RoomType;
+            if (string.IsNullOrWhiteSpace(choice.ChosenNodeType))
+                choice.ChosenNodeType = step.MapPointType;
+        }
     }
 
     private static ActualPathStepLog MergeActualPathStep(

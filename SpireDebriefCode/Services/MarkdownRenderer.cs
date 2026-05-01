@@ -17,9 +17,11 @@ public static class MarkdownRenderer
         AppendFinalState(md, log.FinalState);
         AppendItems(md, "Final Deck", log.FinalState.Deck);
         AppendItems(md, "Relics", log.FinalState.Relics);
+        AppendCardInstanceChanges(md, log.Floors);
         AppendRunLog(md, log.Floors);
         AppendPathing(md, log.Pathing);
         AppendSummaryCounts(md, log.Summary);
+        AppendExportLimitations(md, log);
         AppendReviewPrompt(md);
         return md.ToString();
     }
@@ -72,6 +74,9 @@ public static class MarkdownRenderer
         {
             md.AppendLine($"#### Floor {choice.Floor}");
             AppendBullet(md, "From", FormatFromNode(pathing, choice));
+            AppendBullet(md, "HP before choice", FormatHp(choice.PlayerStateBefore?.CurrentHp, choice.PlayerStateBefore?.MaxHp));
+            if (choice.PlayerStateBefore?.Relics.Count > 0)
+                AppendInlineItems(md, "Current relics before choice", choice.PlayerStateBefore.Relics);
             if (choice.AvailableNodeIds.Count > 0)
             {
                 md.AppendLine("- Available:");
@@ -79,12 +84,22 @@ public static class MarkdownRenderer
                     md.AppendLine($"  - {Escape(FormatNodeLabel(pathing, choice, nodeId))}");
             }
             AppendBullet(md, "Chosen", FormatChosenNode(choice));
+            AppendBullet(md, "Chosen map point type", choice.ChosenNodeType);
+            AppendBullet(md, "Resolved room type", ResolveRoomType(pathing, choice));
+
+            PathOptionSummary? chosenOption = choice.OptionSummaries
+                .FirstOrDefault(option => option.NodeId.Equals(choice.ChosenNodeId, StringComparison.Ordinal));
+            if (chosenOption?.UnknownCombatPossible != null)
+                AppendBullet(md, "Unknown combat possible", chosenOption.UnknownCombatPossible.Value.ToString().ToLowerInvariant());
+            AppendBullet(md, "Reason", chosenOption?.UnknownCombatReason);
+            if (chosenOption?.ForcedFollowUp.Count > 0)
+                AppendBullet(md, "Forced follow-up after chosen node", string.Join(" -> ", chosenOption.ForcedFollowUp));
 
             if (choice.OptionSummaries.Count > 0)
             {
                 md.AppendLine("- Option summaries:");
                 foreach (PathOptionSummary option in choice.OptionSummaries)
-                    md.AppendLine($"  - {Escape(FormatOptionSummary(option))}");
+                    AppendOptionSummary(md, option);
             }
 
             if (choice.Ranks != null)
@@ -128,6 +143,20 @@ public static class MarkdownRenderer
             : $"{choice.ChosenNodeId} {choice.ChosenNodeType}";
     }
 
+    private static string? ResolveRoomType(PathingLog pathing, PathChoiceLog choice)
+    {
+        string? resolved = FirstPresent(choice.ResolvedRoomType,
+            pathing.ActualPath.FirstOrDefault(step => step.Floor == choice.Floor)?.RoomType);
+        if (string.IsNullOrWhiteSpace(resolved) ||
+            resolved.Equals("Unknown", StringComparison.OrdinalIgnoreCase) ||
+            resolved.Equals(choice.ChosenNodeType, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return resolved;
+    }
+
     private static string FormatNodeLabel(PathingLog pathing, PathChoiceLog choice, string nodeId)
     {
         string? type = choice.OptionSummaries.FirstOrDefault(option => option.NodeId.Equals(nodeId, StringComparison.Ordinal))?.NodeType
@@ -140,20 +169,32 @@ public static class MarkdownRenderer
             ? null
             : FormatNodeLabel(pathing, choice, choice.FromNodeId);
 
-    private static string FormatOptionSummary(PathOptionSummary option)
+    private static void AppendOptionSummary(StringBuilder md, PathOptionSummary option)
     {
         string node = string.IsNullOrWhiteSpace(option.NodeType)
             ? option.NodeId
             : $"{option.NodeId} {option.NodeType}";
-        return $"{node}: paths_to_boss={option.ReachablePathCount}, " +
-            $"elites=min{option.MinElitesReachable}/max{option.MaxElitesReachable}, " +
-            $"rests=min{option.MinRestSitesReachable}/max{option.MaxRestSitesReachable}, " +
-            $"shops=min{option.MinShopsReachable}/max{option.MaxShopsReachable}, " +
-            $"elite_forced={option.EliteForced.ToString().ToLowerInvariant()}, " +
-            $"nearest_rest={FormatNullable(option.NearestRestDistance)}, " +
-            $"nearest_shop={FormatNullable(option.NearestShopDistance)}, " +
-            $"nearest_elite={FormatNullable(option.NearestEliteDistance)}, " +
-            $"flexibility={option.PathFlexibilityScore}";
+        md.AppendLine($"  - {Escape(node)}:");
+        md.AppendLine($"    - paths_to_boss={option.ReachablePathCount}");
+        md.AppendLine($"    - elites=min{option.MinElitesReachable}/max{option.MaxElitesReachable}");
+        md.AppendLine($"    - monsters=min{option.MinMonstersReachable}/max{option.MaxMonstersReachable}");
+        md.AppendLine($"    - rests=min{option.MinRestSitesReachable}/max{option.MaxRestSitesReachable}");
+        md.AppendLine($"    - shops=min{option.MinShopsReachable}/max{option.MaxShopsReachable}");
+        if (option.ImmediateRest == true)
+            md.AppendLine("    - immediate_rest=true");
+        md.AppendLine($"    - elite_forced={option.EliteForced.ToString().ToLowerInvariant()}");
+        md.AppendLine($"    - nearest_rest={FormatNullable(option.NearestRestDistance)}");
+        md.AppendLine($"    - nearest_shop={FormatNullable(option.NearestShopDistance)}");
+        md.AppendLine($"    - nearest_elite={FormatNullable(option.NearestEliteDistance)}");
+        if (option.UnknownCombatPossible != null)
+            md.AppendLine($"    - unknown_combat_possible={option.UnknownCombatPossible.Value.ToString().ToLowerInvariant()}");
+        if (!string.IsNullOrWhiteSpace(option.UnknownCombatReason))
+            md.AppendLine($"    - unknown_combat_reason: {Escape(option.UnknownCombatReason)}");
+        if (option.ForcedFollowUp.Count > 0)
+            md.AppendLine($"    - forced_follow_up: {Escape(string.Join(" -> ", option.ForcedFollowUp))}");
+        md.AppendLine($"    - flexibility={option.PathFlexibilityScore}");
+        if (!string.IsNullOrWhiteSpace(option.RiskNote))
+            md.AppendLine($"    - risk_note: {Escape(option.RiskNote)}");
     }
 
     private static void AddRank(List<string> ranks, string label, int? rank)
@@ -198,12 +239,17 @@ public static class MarkdownRenderer
                 AppendInlineItems(md, "Relic rewards", floor.RelicRewards);
             if (floor.PotionRewards.Count > 0)
                 AppendInlineItems(md, "Potion rewards", floor.PotionRewards);
+            if (floor.PotionsUsed.Count > 0)
+                AppendInlineItems(md, "Potions used", floor.PotionsUsed);
+            if (floor.PotionsDiscarded.Count > 0)
+                AppendInlineItems(md, "Potions discarded", floor.PotionsDiscarded);
             if (floor.CardsGained.Count > 0)
                 AppendInlineItems(md, "Cards gained", floor.CardsGained);
             if (floor.CardsRemoved.Count > 0 && (floor.Shop?.Removed.Count ?? 0) != floor.CardsRemoved.Count)
                 AppendInlineItems(md, "Cards removed", floor.CardsRemoved);
             if (floor.Event != null)
                 AppendEvent(md, floor.Event);
+            AppendFloorCardModifications(md, floor);
             if (floor.Shop != null)
                 AppendShop(md, floor.Shop);
             if (floor.RestSite != null)
@@ -212,6 +258,35 @@ public static class MarkdownRenderer
                 md.AppendLine($"- Note: {Escape(note)}");
             md.AppendLine();
         }
+    }
+
+    private static void AppendCardInstanceChanges(StringBuilder md, IReadOnlyList<FloorLog> floors)
+    {
+        List<CardInstanceChangeLog> changes = floors
+            .SelectMany(floor => floor.CardInstanceChanges)
+            .Where(change => !string.IsNullOrWhiteSpace(change.Description))
+            .OrderBy(change => change.Floor)
+            .ToList();
+        if (changes.Count == 0)
+            return;
+
+        md.AppendLine("## Card Instance Changes");
+        foreach (CardInstanceChangeLog change in changes)
+            md.AppendLine($"- Floor {change.Floor}: {Escape(change.Description)}");
+        md.AppendLine();
+    }
+
+    private static void AppendFloorCardModifications(StringBuilder md, FloorLog floor)
+    {
+        List<CardInstanceChangeLog> modifications = floor.CardInstanceChanges
+            .Where(change => !change.IsUpgrade && !string.IsNullOrWhiteSpace(change.Description))
+            .ToList();
+        if (modifications.Count == 0)
+            return;
+
+        md.AppendLine("- Card modifications:");
+        foreach (CardInstanceChangeLog change in modifications)
+            md.AppendLine($"  - {Escape(change.Description)}");
     }
 
     private static void AppendEvent(StringBuilder md, EventDecision evt)
@@ -320,11 +395,17 @@ public static class MarkdownRenderer
     private static string FormatActualPathStep(ActualPathStepLog step)
     {
         string roomType = FirstText(step.MapPointType, step.RoomType, "Unknown");
+        string? resolved = string.IsNullOrWhiteSpace(step.RoomType) ||
+            step.RoomType.Equals("Unknown", StringComparison.OrdinalIgnoreCase) ||
+            step.RoomType.Equals(roomType, StringComparison.OrdinalIgnoreCase)
+                ? null
+                : step.RoomType;
+        string resolvedText = string.IsNullOrWhiteSpace(resolved) ? string.Empty : $", resolved {Escape(resolved)}";
         if (!string.IsNullOrWhiteSpace(step.NodeId))
-            return $"Floor {step.Floor}: chose {Escape(roomType)} at {Escape(step.NodeId)}";
+            return $"Floor {step.Floor}: chose {Escape(roomType)} at {Escape(step.NodeId)}{resolvedText}";
         if (!string.IsNullOrWhiteSpace(step.Coordinate))
-            return $"Floor {step.Floor}: chose {Escape(roomType)} at {Escape(step.Coordinate)}";
-        return $"Floor {step.Floor}: {Escape(roomType)}";
+            return $"Floor {step.Floor}: chose {Escape(roomType)} at {Escape(step.Coordinate)}{resolvedText}";
+        return $"Floor {step.Floor}: {Escape(roomType)}{resolvedText}";
     }
 
     private static bool AllCoordinatesMissing(IReadOnlyList<ActualPathStepLog> steps) =>
@@ -340,6 +421,42 @@ public static class MarkdownRenderer
     {
         md.AppendLine("## Review Prompt");
         md.AppendLine(ReviewPrompt);
+    }
+
+    private static void AppendExportLimitations(StringBuilder md, RunDebriefLog log)
+    {
+        List<string> limitations = log.ExportLimitations
+            .Where(limit => !string.IsNullOrWhiteSpace(limit))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (UnknownRoomCombatPossibilityUnavailable(log.Pathing))
+            limitations.Add("Unknown-room combat possibility could not be computed for one or more pathing choices; use map point type for decision-time uncertainty and resolved room type only as the outcome.");
+
+        if (limitations.Count == 0)
+            return;
+
+        md.AppendLine("## Export Limitations");
+        foreach (string limitation in limitations)
+            md.AppendLine($"- {Escape(limitation)}");
+        md.AppendLine();
+    }
+
+    private static bool UnknownRoomCombatPossibilityUnavailable(PathingLog? pathing)
+    {
+        if (pathing == null)
+            return false;
+
+        bool hasUnknown = pathing.Choices.Any(choice => choice.OptionSummaries.Any(option =>
+            option.NodeType?.Equals("Unknown", StringComparison.OrdinalIgnoreCase) == true)) ||
+            pathing.ActualPath.Any(step =>
+                step.MapPointType?.Equals("Unknown", StringComparison.OrdinalIgnoreCase) == true);
+        if (!hasUnknown)
+            return false;
+
+        return !pathing.Choices.Any(choice => choice.OptionSummaries.Any(option =>
+            option.NodeType?.Equals("Unknown", StringComparison.OrdinalIgnoreCase) == true &&
+            option.UnknownCombatPossible != null));
     }
 
     private static string LoadReviewPrompt()
@@ -379,4 +496,7 @@ public static class MarkdownRenderer
 
     private static string FirstText(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
+
+    private static string? FirstPresent(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 }

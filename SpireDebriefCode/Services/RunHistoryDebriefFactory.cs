@@ -30,6 +30,7 @@ public static class RunHistoryDebriefFactory
             Pathing = BuildPathing(history, floors)
         };
         log.Summary = BuildSummary(history, player, log);
+        log.ExportLimitations = BuildExportLimitations(history, player, log);
         return true;
     }
 
@@ -170,6 +171,8 @@ public static class RunHistoryDebriefFactory
         AddEvent(floor, point, room, stats);
         AddShop(floor, stats);
         AddRestSite(floor, stats);
+        AddPotionUsage(floor, stats);
+        AddCardInstanceChanges(floor, stats);
         return floor;
     }
 
@@ -343,8 +346,58 @@ public static class RunHistoryDebriefFactory
         floor.RestSite = new RestSiteDecision
         {
             Action = NormalizeRestAction(action),
-            Target = stats.UpgradedCards.Select(ToCardItem).FirstOrDefault(item => item != null)
+            Target = stats.UpgradedCards.Select(ToUpgradedCardItem).FirstOrDefault(item => item != null)
         };
+    }
+
+    private static void AddPotionUsage(FloorLog floor, PlayerMapPointHistoryEntry stats)
+    {
+        floor.PotionsUsed.AddRange(stats.PotionUsed.Select(ToPotionItem).WhereNotNull());
+        floor.PotionsDiscarded.AddRange(stats.PotionDiscarded.Select(ToPotionItem).WhereNotNull());
+    }
+
+    private static void AddCardInstanceChanges(FloorLog floor, PlayerMapPointHistoryEntry stats)
+    {
+        foreach (ModelId upgradedCardId in stats.UpgradedCards)
+        {
+            DebriefItem? before = ToCardItem(upgradedCardId);
+            DebriefItem? after = ToUpgradedCardItem(upgradedCardId);
+            if (before == null || after == null)
+                continue;
+
+            floor.CardInstanceChanges.Add(new CardInstanceChangeLog
+            {
+                Floor = floor.Floor,
+                CardBefore = before,
+                CardAfter = after,
+                ChangeKind = "upgrade",
+                Description = $"{before.BaseDisplayName} upgraded to {after.BaseDisplayName}",
+                IsUpgrade = true
+            });
+        }
+
+        foreach (CardEnchantmentHistoryEntry entry in stats.CardsEnchanted)
+        {
+            SerializableCard? enchantedCard = entry.Card;
+            CardInstanceMetadata? metadata = CardInstanceMetadataExtractor.ExtractEnchantment(
+                enchantedCard?.Enchantment,
+                entry.Enchantment);
+            DebriefItem? card = enchantedCard == null ? null : ToCardItem(enchantedCard);
+            string metadataText = metadata == null
+                ? "unknown enchantment"
+                : CardInstanceMetadataExtractor.FormatForChange([metadata]);
+
+            floor.CardInstanceChanges.Add(new CardInstanceChangeLog
+            {
+                Floor = floor.Floor,
+                CardAfter = card,
+                ChangeKind = "enchantment",
+                Description = card == null
+                    ? $"card enchantment target unavailable; gained {metadataText}"
+                    : $"{card.BaseDisplayName} gained {metadataText}",
+                IsUncertain = card == null
+            });
+        }
     }
 
     private static SummaryCounts BuildSummary(
@@ -370,6 +423,54 @@ public static class RunHistoryDebriefFactory
 
         PlayerMapPointHistoryEntry? GetPlayerStats(MapPointHistoryEntry point) =>
             RunHistoryDebriefFactory.GetPlayerStats(point, player);
+    }
+
+    private static List<string> BuildExportLimitations(
+        RunHistory history,
+        RunHistoryPlayer player,
+        RunDebriefLog log)
+    {
+        List<string> limitations = [];
+
+        if (log.Floors.Any(floor => floor.Encounter != null ||
+            floor.RoomType.Equals("Monster", StringComparison.OrdinalIgnoreCase) ||
+            floor.RoomType.Equals("Elite", StringComparison.OrdinalIgnoreCase) ||
+            floor.RoomType.Equals("Boss", StringComparison.OrdinalIgnoreCase)))
+        {
+            limitations.Add("Turn-by-turn combat order is not available from RunHistory.");
+        }
+
+        if (log.Floors.Any(floor => floor.Shop != null ||
+            floor.RoomType.Equals("Shop", StringComparison.OrdinalIgnoreCase)))
+        {
+            limitations.Add("Full shop inventories for unpurchased items are not available from RunHistory.");
+        }
+
+        if (log.Floors.Any(floor => floor.Event != null))
+            limitations.Add("Some event option text and option effects may not be available from RunHistory.");
+
+        if (history.MapPointHistory
+            .SelectMany(act => act)
+            .Select(point => GetPlayerStats(point, player))
+            .WhereNotNull()
+            .Any(stats => stats.PotionUsed.Count > 0 || stats.PotionDiscarded.Count > 0))
+        {
+            limitations.Add("Potion use/discard is floor-level only; exact turn timing is not available.");
+        }
+
+        List<int> cardTargetUnavailableFloors = log.Floors
+            .Where(floor => floor.CardInstanceChanges.Any(change =>
+                change.ChangeKind.Equals("enchantment", StringComparison.OrdinalIgnoreCase) &&
+                change.IsUncertain))
+            .Select(floor => floor.Floor)
+            .ToList();
+        if (cardTargetUnavailableFloors.Count > 0)
+        {
+            limitations.Add(
+                $"Card modifier target data was unavailable for floors: {string.Join(", ", cardTargetUnavailableFloors)}.");
+        }
+
+        return limitations;
     }
 
     private static PlayerMapPointHistoryEntry? GetPlayerStats(
@@ -416,7 +517,8 @@ public static class RunHistoryDebriefFactory
         {
             Id = card.Id.ToString(),
             Name = model.Title,
-            UpgradeCount = card.CurrentUpgradeLevel > 0 ? card.CurrentUpgradeLevel : null
+            UpgradeCount = card.CurrentUpgradeLevel > 0 ? card.CurrentUpgradeLevel : null,
+            InstanceMetadata = CardInstanceMetadataExtractor.Extract(card)
         };
     }
 
@@ -485,6 +587,14 @@ public static class RunHistoryDebriefFactory
             Id = id.ToString(),
             Name = Text(SaveUtil.CardOrDeprecated(id)) ?? id.ToString()
         };
+    }
+
+    private static DebriefItem? ToUpgradedCardItem(ModelId id)
+    {
+        DebriefItem? item = ToCardItem(id);
+        if (item != null)
+            item.UpgradeCount = 1;
+        return item;
     }
 
     private static DebriefItem? ToRelicItem(SerializableRelic relic)
@@ -580,6 +690,7 @@ public static class RunHistoryDebriefFactory
             CardModel card => card.Title,
             RelicModel relic => Text(relic.Title),
             PotionModel potion => Text(potion.Title),
+            EnchantmentModel enchantment => Text(enchantment.Title),
             CharacterModel character => Text(character.Title),
             EncounterModel encounter => Text(encounter.Title),
             MonsterModel monster => Text(monster.Title),
