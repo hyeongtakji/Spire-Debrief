@@ -27,7 +27,7 @@
     <ItemGroup>
         <PackageReference Include="Alchyr.Sts2.BaseLib" Version="*" PrivateAssets="All" />
         <PackageReference Include="Krafs.Publicizer" Version="2.3.0" PrivateAssets="All" />
-        <PackageReference Include="Alchyr.Sts2.ModAnalyzers" Version="*" />
+        <PackageReference Include="Alchyr.Sts2.ModAnalyzers" Version="0.1.6" />
         <AdditionalFiles Include="SpireDebrief/localization/**/*.json" />
         <EmbeddedResource Include="SpireDebriefCode/Resources/ReviewPrompt.md" LogicalName="SpireDebrief.ReviewPrompt.md" />
     </ItemGroup>
