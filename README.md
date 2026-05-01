@@ -25,8 +25,8 @@ The Markdown export includes:
   picked/skipped rewards, extra card gains, card removals, relics,
   potions, event choices, shop purchases/removals, and rest-site choices
 - Pathing analysis data: actual path reconstruction when available,
-  live-captured map graphs and route choice option summaries for runs
-  played after this version is installed
+  concise route choice option summaries for runs played after this
+  version is installed, and graph summaries for captured act maps
 - Summary counts for picked cards, skipped card rewards, removals,
   upgrades, relics acquired, shops, and elites
 - A ready-to-paste review prompt
@@ -48,6 +48,11 @@ summaries such as reachable path count, elite/rest/shop ranges, nearest
 rest/shop/elite distance, and flexibility. The export merges matching
 telemetry when present; missing telemetry never blocks a Run History
 export.
+
+The Markdown export keeps pathing output compact: it focuses on actual
+path, real decision points, forced path steps, and option summaries. The
+full captured map graph remains in the telemetry JSON files for deeper
+inspection.
 
 Pathing data is factual input for LLM review. The mod itself does not
 judge whether a route was strategically good or bad.

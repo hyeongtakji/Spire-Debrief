@@ -63,15 +63,15 @@ public static class MarkdownRenderer
         md.AppendLine();
     }
 
-    private static void AppendPathChoices(StringBuilder md, PathingLog pathing)
+    private static void AppendPathChoices(StringBuilder md, PathingLog pathing, IReadOnlyList<PathChoiceLog> choices)
     {
         md.AppendLine("### Path Choices");
         md.AppendLine();
 
-        foreach (PathChoiceLog choice in pathing.Choices.OrderBy(choice => choice.Floor))
+        foreach (PathChoiceLog choice in choices)
         {
             md.AppendLine($"#### Floor {choice.Floor}");
-            AppendBullet(md, "From", choice.FromNodeId);
+            AppendBullet(md, "From", FormatFromNode(pathing, choice));
             if (choice.AvailableNodeIds.Count > 0)
             {
                 md.AppendLine("- Available:");
@@ -103,6 +103,22 @@ public static class MarkdownRenderer
         }
     }
 
+    private static void AppendForcedPathSteps(StringBuilder md, PathingLog pathing, IReadOnlyList<PathChoiceLog> choices)
+    {
+        md.AppendLine("### Forced Path Steps");
+        md.AppendLine();
+
+        foreach (PathChoiceLog choice in choices)
+        {
+            string from = string.IsNullOrWhiteSpace(choice.FromNodeId)
+                ? "Unknown"
+                : FormatNodeLabel(pathing, choice, choice.FromNodeId);
+            md.AppendLine($"- Floor {choice.Floor}: {Escape(from)} -> {Escape(FormatChosenNode(choice))}");
+        }
+
+        md.AppendLine();
+    }
+
     private static string FormatChosenNode(PathChoiceLog choice)
     {
         if (string.IsNullOrWhiteSpace(choice.ChosenNodeId))
@@ -119,6 +135,11 @@ public static class MarkdownRenderer
         return string.IsNullOrWhiteSpace(type) ? nodeId : $"{nodeId} {type}";
     }
 
+    private static string? FormatFromNode(PathingLog pathing, PathChoiceLog choice) =>
+        string.IsNullOrWhiteSpace(choice.FromNodeId)
+            ? null
+            : FormatNodeLabel(pathing, choice, choice.FromNodeId);
+
     private static string FormatOptionSummary(PathOptionSummary option)
     {
         string node = string.IsNullOrWhiteSpace(option.NodeType)
@@ -126,16 +147,10 @@ public static class MarkdownRenderer
             : $"{option.NodeId} {option.NodeType}";
         return $"{node}: paths_to_boss={option.ReachablePathCount}, " +
             $"elites=min{option.MinElitesReachable}/max{option.MaxElitesReachable}, " +
-            $"monsters=min{option.MinMonstersReachable}/max{option.MaxMonstersReachable}, " +
             $"rests=min{option.MinRestSitesReachable}/max{option.MaxRestSitesReachable}, " +
             $"shops=min{option.MinShopsReachable}/max{option.MaxShopsReachable}, " +
-            $"treasures=min{option.MinTreasuresReachable}/max{option.MaxTreasuresReachable}, " +
-            $"unknowns=min{option.MinUnknownsReachable}/max{option.MaxUnknownsReachable}, " +
-            $"events=min{option.MinEventsReachable}/max{option.MaxEventsReachable}, " +
             $"elite_forced={option.EliteForced.ToString().ToLowerInvariant()}, " +
-            $"rest_reachable={option.RestSiteReachable.ToString().ToLowerInvariant()}, " +
             $"nearest_rest={FormatNullable(option.NearestRestDistance)}, " +
-            $"nearest_shop={FormatNullable(option.NearestShopDistance)}, " +
             $"nearest_elite={FormatNullable(option.NearestEliteDistance)}, " +
             $"flexibility={option.PathFlexibilityScore}";
     }
@@ -271,8 +286,22 @@ public static class MarkdownRenderer
         }
         md.AppendLine();
 
-        if (pathing.Choices.Count > 0)
-            AppendPathChoices(md, pathing);
+        List<PathChoiceLog> consistentChoices = pathing.Choices
+            .Where(IsConsistentChoice)
+            .OrderBy(choice => choice.Floor)
+            .ToList();
+        List<PathChoiceLog> decisionChoices = consistentChoices
+            .Where(choice => choice.AvailableNodeIds.Count > 1)
+            .ToList();
+        List<PathChoiceLog> forcedChoices = consistentChoices
+            .Where(choice => choice.AvailableNodeIds.Count == 1)
+            .ToList();
+
+        if (decisionChoices.Count > 0)
+            AppendPathChoices(md, pathing, decisionChoices);
+
+        if (forcedChoices.Count > 0)
+            AppendForcedPathSteps(md, pathing, forcedChoices);
 
         if (pathing.Source.Equals("live_telemetry", StringComparison.OrdinalIgnoreCase) ||
             pathing.Acts.Count > 0 ||
@@ -281,7 +310,7 @@ public static class MarkdownRenderer
             md.AppendLine("### Structured Pathing JSON");
             md.AppendLine();
             md.AppendLine("```json");
-            md.AppendLine(PathingJsonSerializer.Serialize(pathing));
+            md.AppendLine(PathingJsonSerializer.SerializeCompact(pathing));
             md.AppendLine("```");
             md.AppendLine();
         }
@@ -301,6 +330,10 @@ public static class MarkdownRenderer
         steps.Count > 0 &&
         steps.All(step => string.IsNullOrWhiteSpace(step.NodeId) &&
             string.IsNullOrWhiteSpace(step.Coordinate));
+
+    private static bool IsConsistentChoice(PathChoiceLog choice) =>
+        !string.IsNullOrWhiteSpace(choice.ChosenNodeId) &&
+        choice.AvailableNodeIds.Contains(choice.ChosenNodeId, StringComparer.Ordinal);
 
     private static void AppendReviewPrompt(StringBuilder md)
     {
