@@ -9,8 +9,9 @@ screen, renders a Markdown debrief, copies it to the clipboard when
 possible, and saves it under the installed mod folder.
 
 Spire Debrief does not record turn-by-turn combat details and does not
-log decisions while a run is in progress. It uses the game's saved
-`RunHistory` data after the run appears in Run History.
+change gameplay. It uses the game's saved `RunHistory` data after the
+run appears in Run History, and it can also record pathing telemetry
+while a run is in progress for richer post-run route review.
 
 ## Exported Data
 
@@ -23,12 +24,33 @@ The Markdown export includes:
   combat turns, damage taken when available, card choices,
   picked/skipped rewards, extra card gains, card removals, relics,
   potions, event choices, shop purchases/removals, and rest-site choices
+- Pathing analysis data: actual path reconstruction when available,
+  live-captured map graphs and route choice option summaries for runs
+  played after this version is installed
 - Summary counts for picked cards, skipped card rewards, removals,
   upgrades, relics acquired, shops, and elites
 - A ready-to-paste review prompt
 
 If the run history screen does not have a loaded `RunHistory` object,
 export fails and the button changes to `Export Failed`.
+
+## Pathing Data
+
+Existing runs can only include the path facts saved in `RunHistory`.
+Those old entries may identify the visited floor and map point type, but
+the game history data may not include node coordinates or alternative
+map routes.
+
+For future runs, Spire Debrief records live pathing telemetry under the
+installed mod folder. That telemetry captures each act map graph, the
+actual chosen nodes, available next nodes, and deterministic option
+summaries such as reachable path count, elite/rest/shop ranges, nearest
+rest/shop/elite distance, and flexibility. The export merges matching
+telemetry when present; missing telemetry never blocks a Run History
+export.
+
+Pathing data is factual input for LLM review. The mod itself does not
+judge whether a route was strategically good or bad.
 
 ## Usage
 
@@ -43,6 +65,12 @@ Exports are saved to:
 
 ```text
 <Sts2Path>/mods/SpireDebrief/exports/
+```
+
+Live pathing telemetry is saved to:
+
+```text
+<Sts2Path>/mods/SpireDebrief/telemetry/
 ```
 
 ## Installation
@@ -101,6 +129,7 @@ When building from WSL against a Windows Steam install, set both
 ## Development Notes
 
 The runtime patch is intentionally narrow. It only patches the run
-history screen so it can add the export button. Export data comes from
-the game's loaded `RunHistory`; there are no card reward, event, shop,
-rest-site, combat, or run lifecycle hooks.
+history screen so it can add the export button. Pathing telemetry uses
+run lifecycle events to observe map state and save route facts, but it
+does not add map highlighting, recommendations, card reward, event,
+shop, rest-site, or combat decision hooks.
