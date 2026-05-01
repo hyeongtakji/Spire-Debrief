@@ -43,6 +43,7 @@ public static class RuntimeHooks
                 return;
             }
 
+            PathingMergeService.TryMergeTelemetry(log);
             string markdown = MarkdownRenderer.Render(log);
             ExportResult result = DebriefStorage.ExportMarkdown(log, markdown);
 

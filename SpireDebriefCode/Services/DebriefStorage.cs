@@ -9,10 +9,12 @@ public static class DebriefStorage
 {
     public static string BaseDir => ResolveModDirectory();
     public static string ExportsDir => Path.Combine(BaseDir, "exports");
+    public static string TelemetryDir => Path.Combine(BaseDir, "telemetry");
 
     public static void EnsureDirectories()
     {
         Directory.CreateDirectory(ExportsDir);
+        Directory.CreateDirectory(TelemetryDir);
     }
 
     public static ExportResult ExportMarkdown(RunDebriefLog log, string markdown)

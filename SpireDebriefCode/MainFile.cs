@@ -23,6 +23,7 @@ public partial class MainFile : Node
 
             Harmony harmony = new(ModId);
             ReflectionHookInstaller.Install(harmony);
+            PathTelemetryService.Install();
 
             Logger.Info($"{ModId} {ModVersion} initialized.");
         }
