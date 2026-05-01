@@ -23,12 +23,22 @@ The Markdown export includes:
 - Floor-by-floor history: room type, encounter, ending HP, ending gold,
   combat turns, damage taken when available, card choices,
   picked/skipped rewards, extra card gains, card removals, relics,
-  potions, event choices, shop purchases/removals, and rest-site choices
+  potions, event choices, shop purchases/removals, rest-site choices,
+  potion use/discard when available, and card instance changes such as
+  upgrades and enchantments
+- Card instance metadata: saved card enchantments/modifiers are shown
+  inline on card names when RunHistory exposes them, and run-defining
+  upgrades/enchantments are summarized in a `Card Instance Changes`
+  section
 - Pathing analysis data: actual path reconstruction when available,
-  concise route choice option summaries for runs played after this
-  version is installed, and graph summaries for captured act maps
+  route choice option summaries with current relics, resolved room type,
+  unknown-room odds, forced follow-up, and risk notes for runs played
+  after this version is installed, plus graph summaries for captured act
+  maps
 - Summary counts for picked cards, skipped card rewards, removals,
   upgrades, relics acquired, shops, and elites
+- Export limitations for strategically relevant data that RunHistory or
+  telemetry does not expose
 - A ready-to-paste review prompt
 
 If the run history screen does not have a loaded `RunHistory` object,
@@ -45,9 +55,9 @@ For future runs, Spire Debrief records live pathing telemetry under the
 installed mod folder. That telemetry captures each act map graph, the
 actual chosen nodes, available next nodes, and deterministic option
 summaries such as reachable path count, elite/rest/shop ranges, nearest
-rest/shop/elite distance, and flexibility. The export merges matching
-telemetry when present; missing telemetry never blocks a Run History
-export.
+rest/shop/elite distance, forced follow-up, risk notes, current relics,
+and current unknown-room odds. The export merges matching telemetry when
+present; missing telemetry never blocks a Run History export.
 
 The Markdown export keeps pathing output compact: it focuses on actual
 path, real decision points, forced path steps, and option summaries. The
@@ -56,6 +66,22 @@ inspection.
 
 Pathing data is factual input for LLM review. The mod itself does not
 judge whether a route was strategically good or bad.
+
+## Validation
+
+This repository does not currently include a test project. Before
+shipping exporter changes, run:
+
+```sh
+dotnet build -c Release
+```
+
+Then manually export at least one plain-card run and one run containing
+card enchantments if available. Check that plain cards still render as
+before, upgraded cards render with `+`, card enchantments appear inline
+and in `Card Instance Changes`, pathing choices include readable risk
+notes when live telemetry exists, and the bundled review prompt includes
+the uncertainty instructions.
 
 ## Usage
 
