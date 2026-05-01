@@ -69,19 +69,17 @@ judge whether a route was strategically good or bad.
 
 ## Validation
 
-This repository does not currently include a test project. Before
-shipping exporter changes, run:
+Before shipping exporter changes, run the automated tests and release
+build:
 
 ```sh
+dotnet test SpireDebrief.Tests/SpireDebrief.Tests.csproj -c Release
 dotnet build -c Release
 ```
 
-Then manually export at least one plain-card run and one run containing
-card enchantments if available. Check that plain cards still render as
-before, upgraded cards render with `+`, card enchantments appear inline
-and in `Card Instance Changes`, pathing choices include readable risk
-notes when live telemetry exists, and the bundled review prompt includes
-the uncertainty instructions.
+The test project covers focused exporter, pathing, and prompt behavior
+without launching Slay the Spire 2. Manual in-game exports are still
+useful for runtime hook or UI changes.
 
 ## Usage
 
