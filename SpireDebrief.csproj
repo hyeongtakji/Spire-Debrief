@@ -34,7 +34,10 @@
 
     <ItemGroup>
         <Compile Remove="SpireDebrief/**" />
+        <Compile Remove="SpireDebrief.Tests/**" />
         <EmbeddedResource Remove="SpireDebrief/**" />
+        <EmbeddedResource Remove="SpireDebrief.Tests/**" />
+        <None Remove="SpireDebrief.Tests/**" />
     </ItemGroup>
 
     <ItemGroup>
