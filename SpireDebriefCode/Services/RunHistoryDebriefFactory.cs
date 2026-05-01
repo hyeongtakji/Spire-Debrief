@@ -61,7 +61,7 @@ public static class RunHistoryDebriefFactory
             GameVersion = history.BuildId,
             ModVersion = modVersion,
             Result = history.Win ? "Victory" : history.WasAbandoned ? "Abandoned" : "Defeat",
-            FinalAct = history.Acts.LastOrDefault()?.ToString(),
+            FinalAct = FormatFinalAct(history),
             FinalFloor = finalFloor > 0 ? finalFloor : null,
             FinalRoom = NormalizeRoomType(lastRoom?.RoomType.ToString() ?? lastPoint?.MapPointType.ToString())
         };
@@ -340,11 +340,15 @@ public static class RunHistoryDebriefFactory
     {
         if (room == null)
             return null;
-        if (room.ModelId != null && IsCombatRoom(room.RoomType))
+
+        if (!IsCombatRoom(room.RoomType))
+            return null;
+
+        if (room.ModelId != null)
             return Text(SaveUtil.EncounterOrDeprecated(room.ModelId));
         if (room.MonsterIds.Count > 0)
             return string.Join(", ", room.MonsterIds.Select(id => Text(SaveUtil.MonsterOrDeprecated(id))));
-        return room.ModelId?.ToString();
+        return null;
     }
 
     private static string? ResolveEventName(MapPointRoomHistoryEntry? room)
@@ -438,6 +442,9 @@ public static class RunHistoryDebriefFactory
             "HEAL" => "Rest",
             _ => action
         };
+
+    private static string? FormatFinalAct(RunHistory history) =>
+        history.Acts.Count > 0 ? $"Act {history.Acts.Count}" : null;
 
     internal static string FormatPathingChoice(string roomType, string? nodeId) =>
         string.IsNullOrWhiteSpace(nodeId)

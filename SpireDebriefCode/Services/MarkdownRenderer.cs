@@ -32,7 +32,7 @@ public static class MarkdownRenderer
         AppendBullet(md, "Seed", meta.Seed);
         AppendBullet(md, "Game Version", meta.GameVersion);
         AppendBullet(md, "Mod Version", meta.ModVersion);
-        AppendBullet(md, "Date", meta.StartedAt);
+        AppendBullet(md, "Started At", meta.StartedAt);
         AppendBullet(md, "Result", meta.Result);
         AppendBullet(md, "Ended At", FormatEndedAt(meta));
         md.AppendLine();
@@ -151,6 +151,7 @@ public static class MarkdownRenderer
             $"shops=min{option.MinShopsReachable}/max{option.MaxShopsReachable}, " +
             $"elite_forced={option.EliteForced.ToString().ToLowerInvariant()}, " +
             $"nearest_rest={FormatNullable(option.NearestRestDistance)}, " +
+            $"nearest_shop={FormatNullable(option.NearestShopDistance)}, " +
             $"nearest_elite={FormatNullable(option.NearestEliteDistance)}, " +
             $"flexibility={option.PathFlexibilityScore}";
     }
@@ -244,7 +245,7 @@ public static class MarkdownRenderer
     private static void AppendSummaryCounts(StringBuilder md, SummaryCounts summary)
     {
         md.AppendLine("## Summary Counts");
-        AppendBullet(md, "Cards picked", summary.CardsPicked.ToString());
+        AppendBullet(md, "Card rewards picked", summary.CardsPicked.ToString());
         AppendBullet(md, "Card rewards skipped", summary.CardRewardsSkipped.ToString());
         AppendBullet(md, "Cards removed", summary.CardsRemoved.ToString());
         AppendBullet(md, "Cards upgraded", summary.CardsUpgraded.ToString());
