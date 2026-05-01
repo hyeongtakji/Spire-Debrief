@@ -175,6 +175,9 @@ public static class RunHistoryDebriefFactory
 
     private static void AddCardChoices(FloorLog floor, PlayerMapPointHistoryEntry stats)
     {
+        if (IsShopRoom(floor))
+            return;
+
         if (stats.CardChoices.Count == 0)
             return;
 
@@ -198,16 +201,18 @@ public static class RunHistoryDebriefFactory
         if (floor.RoomType.Equals("Shop", StringComparison.OrdinalIgnoreCase))
             return;
 
-        HashSet<string> representedPickedCards = stats.CardChoices
+        Dictionary<string, int> representedPickedCards = CardCounts(stats.CardChoices
             .Where(choice => choice.wasPicked)
-            .Select(choice => CardKey(choice.Card))
-            .WhereText()
-            .ToHashSet(StringComparer.Ordinal);
+            .Select(choice => choice.Card));
+        Dictionary<string, int> removedCardCounts = CardCounts(stats.CardsRemoved);
 
         foreach (SerializableCard card in stats.CardsGained)
         {
             string? key = CardKey(card);
-            if (key != null && representedPickedCards.Remove(key))
+            if (ConsumeCount(representedPickedCards, key))
+                continue;
+
+            if (ConsumeCount(removedCardCounts, key))
                 continue;
 
             DebriefItem? item = ToCardItem(card);
@@ -218,6 +223,9 @@ public static class RunHistoryDebriefFactory
 
     private static void AddRewards(FloorLog floor, PlayerMapPointHistoryEntry stats)
     {
+        if (IsShopRoom(floor))
+            return;
+
         foreach (ModelChoiceHistoryEntry choice in stats.RelicChoices.Where(choice => choice.wasPicked))
         {
             DebriefItem? item = ToRelicItem(choice.choice);
@@ -235,7 +243,16 @@ public static class RunHistoryDebriefFactory
 
     private static void AddCardRemovals(FloorLog floor, PlayerMapPointHistoryEntry stats)
     {
-        floor.CardsRemoved.AddRange(stats.CardsRemoved.Select(ToCardItem).WhereNotNull());
+        Dictionary<string, int> nonRewardGainedCards = NonRewardCardGainCounts(stats);
+        foreach (SerializableCard card in stats.CardsRemoved)
+        {
+            if (ConsumeCount(nonRewardGainedCards, CardKey(card)))
+                continue;
+
+            DebriefItem? item = ToCardItem(card);
+            if (item != null)
+                floor.CardsRemoved.Add(item);
+        }
     }
 
     private static void AddEvent(
@@ -256,12 +273,13 @@ public static class RunHistoryDebriefFactory
             return;
         }
 
-        if (stats.EventChoices.Count == 0 && room?.RoomType != RoomType.Event)
+        MapPointRoomHistoryEntry? eventRoom = point.Rooms.LastOrDefault(IsEventRoom);
+        if (stats.EventChoices.Count == 0 && eventRoom == null && room?.RoomType != RoomType.Event)
             return;
 
         EventDecision evt = new()
         {
-            Name = ResolveEventName(room)
+            Name = ResolveEventName(eventRoom ?? room)
         };
         List<string> chosenOptions = stats.EventChoices
             .Select(choice => Text(choice.Title))
@@ -378,7 +396,15 @@ public static class RunHistoryDebriefFactory
     {
         if (room?.ModelId == null)
             return null;
-        return Text(SaveUtil.EventOrDeprecated(room.ModelId)) ?? room.ModelId.ToString();
+
+        try
+        {
+            return Text(SaveUtil.EventOrDeprecated(room.ModelId)) ?? room.ModelId.ToString();
+        }
+        catch
+        {
+            return room.ModelId.ToString();
+        }
     }
 
     private static DebriefItem? ToCardItem(SerializableCard card)
@@ -402,6 +428,40 @@ public static class RunHistoryDebriefFactory
 
     private static string? CardIdKey(ModelId id) =>
         id == ModelId.none ? null : id.ToString();
+
+    private static Dictionary<string, int> NonRewardCardGainCounts(PlayerMapPointHistoryEntry stats)
+    {
+        Dictionary<string, int> representedPickedCards = CardCounts(stats.CardChoices
+            .Where(choice => choice.wasPicked)
+            .Select(choice => choice.Card));
+        Dictionary<string, int> counts = [];
+
+        foreach (SerializableCard card in stats.CardsGained)
+        {
+            string? key = CardKey(card);
+            if (ConsumeCount(representedPickedCards, key) || key == null)
+                continue;
+
+            counts[key] = counts.GetValueOrDefault(key) + 1;
+        }
+
+        return counts;
+    }
+
+    private static Dictionary<string, int> CardCounts(IEnumerable<SerializableCard> cards)
+    {
+        Dictionary<string, int> counts = [];
+        foreach (SerializableCard card in cards)
+        {
+            string? key = CardKey(card);
+            if (key == null)
+                continue;
+
+            counts[key] = counts.GetValueOrDefault(key) + 1;
+        }
+
+        return counts;
+    }
 
     private static bool ConsumeCount(Dictionary<string, int> counts, string? key)
     {
@@ -465,6 +525,12 @@ public static class RunHistoryDebriefFactory
 
     private static bool IsCombatRoom(RoomType roomType) =>
         roomType is RoomType.Monster or RoomType.Elite or RoomType.Boss;
+
+    private static bool IsShopRoom(FloorLog floor) =>
+        floor.RoomType.Equals("Shop", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsEventRoom(MapPointRoomHistoryEntry room) =>
+        room.RoomType == RoomType.Event;
 
     private static string NormalizeRoomType(string? roomType)
     {
