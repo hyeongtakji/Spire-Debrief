@@ -662,7 +662,9 @@ public static class RunHistoryDebriefFactory
         };
 
     private static string? FormatFinalAct(RunHistory history) =>
-        history.Acts.Count > 0 ? $"Act {history.Acts.Count}" : null;
+        RunHistoryText.FormatFinalAct(
+            history.Acts.Count,
+            history.MapPointHistory.Select(act => act.Count));
 
     internal static string FormatPathingChoice(string roomType, string? nodeId) =>
         string.IsNullOrWhiteSpace(nodeId)

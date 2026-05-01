@@ -108,6 +108,30 @@ public sealed class MarkdownRendererTests
             withLimitationsMarkdown);
     }
 
+    [Fact]
+    public void Render_warns_when_abandoned_run_reports_zero_hp()
+    {
+        RunDebriefLog log = new()
+        {
+            Metadata = new RunMetadata
+            {
+                Result = "Abandoned"
+            },
+            FinalState = new FinalRunState
+            {
+                CurrentHp = 0,
+                MaxHp = 75
+            }
+        };
+
+        string markdown = MarkdownRenderer.Render(log);
+
+        Assert.Contains("## Export Limitations", markdown);
+        Assert.Contains(
+            "RunHistory can report 0 HP for abandoned runs",
+            markdown);
+    }
+
     private static DebriefItem Card(
         string name,
         int? upgradeCount = null,

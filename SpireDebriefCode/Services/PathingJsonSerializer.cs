@@ -115,6 +115,7 @@ public static class PathingJsonSerializer
             option.NodeType,
             PathsToBoss = option.ReachablePathCount,
             Elites = new { Min = option.MinElitesReachable, Max = option.MaxElitesReachable },
+            Monsters = new { Min = option.MinMonstersReachable, Max = option.MaxMonstersReachable },
             Rests = new { Min = option.MinRestSitesReachable, Max = option.MaxRestSitesReachable },
             Shops = new { Min = option.MinShopsReachable, Max = option.MaxShopsReachable },
             option.EliteForced,

@@ -199,7 +199,9 @@ public static class PathTelemetryService
 
         MapPoint? fromPoint = previousPoint ?? startingPoint;
         string? fromNodeId = fromPoint == null ? null : PathGraphExtractor.NodeId(actIndex, fromPoint);
-        List<string> availableNodeIds = GetAvailableNodeIds(fromPoint, actIndex);
+        ActPathGraphSnapshot? graph = _current.Acts.FirstOrDefault(act => act.ActIndex == actIndex)
+            ?? PathGraphExtractor.Extract(runState, DateTimeOffset.Now);
+        List<string> availableNodeIds = GetAvailableNodeIds(fromPoint, actIndex, graph, fromNodeId);
         if (availableNodeIds.Count == 0)
         {
             AddActualPathStep(floor, actIndex, current, chosenNodeId, chosenType);
@@ -216,8 +218,6 @@ public static class PathTelemetryService
             return;
         }
 
-        ActPathGraphSnapshot? graph = _current.Acts.FirstOrDefault(act => act.ActIndex == actIndex)
-            ?? PathGraphExtractor.Extract(runState, DateTimeOffset.Now);
         PlayerStateSnapshot? playerStateBefore = CapturePlayerState(runState);
         List<PathOptionSummary> optionSummaries = PathChoiceAnalyzer.AnalyzeOptions(graph, availableNodeIds);
         PathChoiceAnalyzer.ApplyRuntimeContext(optionSummaries, playerStateBefore);
@@ -284,14 +284,29 @@ public static class PathTelemetryService
             .Equals(PathGraphExtractor.NodeId(actIndex, other), StringComparison.Ordinal);
     }
 
-    private static List<string> GetAvailableNodeIds(MapPoint? fromPoint, int actIndex)
+    private static List<string> GetAvailableNodeIds(
+        MapPoint? fromPoint,
+        int actIndex,
+        ActPathGraphSnapshot? graph,
+        string? fromNodeId)
     {
-        if (fromPoint?.Children == null)
+        List<string> liveChildren = fromPoint?.Children == null
+            ? []
+            : fromPoint.Children
+                .Where(child => child != null)
+                .Select(child => PathGraphExtractor.NodeId(actIndex, child))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToList();
+        if (liveChildren.Count > 0)
+            return liveChildren;
+
+        if (string.IsNullOrWhiteSpace(fromNodeId) || graph == null)
             return [];
 
-        return fromPoint.Children
-            .Where(child => child != null)
-            .Select(child => PathGraphExtractor.NodeId(actIndex, child))
+        return graph.Edges
+            .Where(edge => edge.FromNodeId.Equals(fromNodeId, StringComparison.Ordinal))
+            .Select(edge => edge.ToNodeId)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToList();

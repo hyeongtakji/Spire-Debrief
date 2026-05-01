@@ -433,6 +433,11 @@ public static class MarkdownRenderer
         if (UnknownRoomCombatPossibilityUnavailable(log.Pathing))
             limitations.Add("Unknown-room combat possibility could not be computed for one or more pathing choices; use map point type for decision-time uncertainty and resolved room type only as the outcome.");
 
+        if (AbandonedAtZeroHp(log))
+        {
+            limitations.Add("RunHistory can report 0 HP for abandoned runs; final HP may reflect abandonment state rather than combat damage.");
+        }
+
         if (limitations.Count == 0)
             return;
 
@@ -458,6 +463,10 @@ public static class MarkdownRenderer
             option.NodeType?.Equals("Unknown", StringComparison.OrdinalIgnoreCase) == true &&
             option.UnknownCombatPossible != null));
     }
+
+    private static bool AbandonedAtZeroHp(RunDebriefLog log) =>
+        log.FinalState.CurrentHp == 0 &&
+        log.Metadata.Result?.Equals("Abandoned", StringComparison.OrdinalIgnoreCase) == true;
 
     private static string LoadReviewPrompt()
     {
