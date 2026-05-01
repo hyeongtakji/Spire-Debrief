@@ -5,6 +5,9 @@ namespace SpireDebrief.SpireDebriefCode.Services;
 
 public static class MarkdownRenderer
 {
+    private const string ReviewPromptResourceName = "SpireDebrief.ReviewPrompt.md";
+    private static readonly string ReviewPrompt = LoadReviewPrompt();
+
     public static string Render(RunDebriefLog log)
     {
         StringBuilder md = new();
@@ -152,12 +155,17 @@ public static class MarkdownRenderer
     private static void AppendReviewPrompt(StringBuilder md)
     {
         md.AppendLine("## Review Prompt");
-        md.AppendLine("Please review this Slay the Spire 2 run. Focus on:");
-        md.AppendLine("1. Bad card picks or missed card picks");
-        md.AppendLine("2. Important event, shop, and rest-site decisions");
-        md.AppendLine("3. Deck direction, scaling, defense, and consistency");
-        md.AppendLine("4. Whether pathing matched the deck strength");
-        md.AppendLine("5. Concrete advice for future runs");
+        md.AppendLine(ReviewPrompt);
+    }
+
+    private static string LoadReviewPrompt()
+    {
+        using Stream? stream = typeof(MarkdownRenderer).Assembly.GetManifestResourceStream(ReviewPromptResourceName);
+        if (stream == null)
+            return "Review this Slay the Spire 2 run as a post-run coach.";
+
+        using StreamReader reader = new(stream, Encoding.UTF8);
+        return reader.ReadToEnd().TrimEnd();
     }
 
     private static void AppendBullet(StringBuilder md, string label, string? value)
