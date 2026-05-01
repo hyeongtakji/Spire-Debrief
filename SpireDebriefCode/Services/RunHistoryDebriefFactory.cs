@@ -275,9 +275,32 @@ public static class RunHistoryDebriefFactory
     {
         bool isShopRoom = floor.RoomType.Equals("Shop", StringComparison.OrdinalIgnoreCase);
         List<DebriefItem> purchased = [];
+        Dictionary<string, int> shopCardGainCounts = [];
         if (isShopRoom)
-            purchased.AddRange(stats.CardsGained.Select(ToCardItem).WhereNotNull());
-        purchased.AddRange(stats.BoughtColorless.Select(ToCardItem).WhereNotNull());
+        {
+            foreach (SerializableCard card in stats.CardsGained)
+            {
+                DebriefItem? item = ToCardItem(card);
+                if (item != null)
+                    purchased.Add(item);
+
+                string? key = CardIdKey(card);
+                if (key != null)
+                    shopCardGainCounts[key] = shopCardGainCounts.GetValueOrDefault(key) + 1;
+            }
+        }
+
+        foreach (ModelId id in stats.BoughtColorless)
+        {
+            string? key = CardIdKey(id);
+            if (ConsumeCount(shopCardGainCounts, key))
+                continue;
+
+            DebriefItem? item = ToCardItem(id);
+            if (item != null)
+                purchased.Add(item);
+        }
+
         purchased.AddRange(stats.BoughtRelics.Select(ToRelicItem).WhereNotNull());
         purchased.AddRange(stats.BoughtPotions.Select(ToPotionItem).WhereNotNull());
 
@@ -373,6 +396,25 @@ public static class RunHistoryDebriefFactory
 
     private static string? CardKey(SerializableCard card) =>
         card.Id == null ? null : $"{card.Id}:{card.CurrentUpgradeLevel}";
+
+    private static string? CardIdKey(SerializableCard card) =>
+        card.Id == null ? null : card.Id.ToString();
+
+    private static string? CardIdKey(ModelId id) =>
+        id == ModelId.none ? null : id.ToString();
+
+    private static bool ConsumeCount(Dictionary<string, int> counts, string? key)
+    {
+        if (key == null || !counts.TryGetValue(key, out int count) || count <= 0)
+            return false;
+
+        if (count == 1)
+            counts.Remove(key);
+        else
+            counts[key] = count - 1;
+
+        return true;
+    }
 
     private static DebriefItem? ToCardItem(ModelId id)
     {
