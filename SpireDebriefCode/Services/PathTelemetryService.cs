@@ -183,21 +183,41 @@ public static class PathTelemetryService
         if (_lastActIndex == actIndex && string.Equals(_lastChosenNodeId, chosenNodeId, StringComparison.Ordinal))
             return;
 
-        MapPoint? fromPoint = _lastActIndex == actIndex ? _lastMapPoint : null;
-        bool fromStart = fromPoint == null;
-        fromPoint ??= runState.Map?.StartingMapPoint;
+        MapPoint? previousPoint = _lastActIndex == actIndex ? _lastMapPoint : null;
+        MapPoint? startingPoint = runState.Map?.StartingMapPoint;
 
-        string? fromNodeId = null;
-        if (fromPoint != null)
-            fromNodeId = fromStart ? "Start" : PathGraphExtractor.NodeId(actIndex, fromPoint);
+        int floor = runState.TotalFloor > 0 ? runState.TotalFloor : _current.ActualPath.Count + 1;
+        string chosenType = PathingText.NormalizeRoomType(current.PointType);
+        if (previousPoint == null && IsSameMapPoint(current, startingPoint, actIndex))
+        {
+            AddActualPathStep(floor, actIndex, current, chosenNodeId, chosenType);
+            UpdateLastPosition(current, chosenNodeId, actIndex, null);
+            return;
+        }
 
+        MapPoint? fromPoint = previousPoint ?? startingPoint;
+        string? fromNodeId = fromPoint == null ? null : PathGraphExtractor.NodeId(actIndex, fromPoint);
         List<string> availableNodeIds = GetAvailableNodeIds(fromPoint, actIndex);
+        if (availableNodeIds.Count == 0)
+        {
+            AddActualPathStep(floor, actIndex, current, chosenNodeId, chosenType);
+            UpdateLastPosition(current, chosenNodeId, actIndex, null);
+            return;
+        }
+
+        if (!availableNodeIds.Contains(chosenNodeId, StringComparer.Ordinal))
+        {
+            MainFile.Logger.Warn(
+                $"Path telemetry skipped inconsistent choice: chosen {chosenNodeId} was not available from {fromNodeId ?? "unknown"}.");
+            AddActualPathStep(floor, actIndex, current, chosenNodeId, chosenType);
+            UpdateLastPosition(current, chosenNodeId, actIndex, null);
+            return;
+        }
+
         ActPathGraphSnapshot? graph = _current.Acts.FirstOrDefault(act => act.ActIndex == actIndex)
             ?? PathGraphExtractor.Extract(runState, DateTimeOffset.Now);
         List<PathOptionSummary> optionSummaries = PathChoiceAnalyzer.AnalyzeOptions(graph, availableNodeIds);
 
-        int floor = runState.TotalFloor > 0 ? runState.TotalFloor : _current.ActualPath.Count + 1;
-        string chosenType = PathingText.NormalizeRoomType(current.PointType);
         PathChoiceLog choice = new()
         {
             Id = $"{_current.RunId}:floor-{floor}:choice-{_current.Choices.Count + 1}",
@@ -214,6 +234,20 @@ public static class PathTelemetryService
         };
 
         _current.Choices.Add(choice);
+        AddActualPathStep(floor, actIndex, current, chosenNodeId, chosenType);
+        UpdateLastPosition(current, chosenNodeId, actIndex, choice);
+    }
+
+    private static void AddActualPathStep(
+        int floor,
+        int actIndex,
+        MapPoint current,
+        string chosenNodeId,
+        string chosenType)
+    {
+        if (_current == null)
+            return;
+
         _current.ActualPath.Add(new ActualPathStepLog
         {
             Floor = floor,
@@ -227,11 +261,23 @@ public static class PathTelemetryService
             PreviousNodeId = _lastActIndex == actIndex ? _lastChosenNodeId : null,
             PathingChoiceSummary = PathingText.FormatPathingChoice(chosenType, chosenNodeId)
         });
+    }
 
+    private static void UpdateLastPosition(MapPoint current, string chosenNodeId, int actIndex, PathChoiceLog? choice)
+    {
         _lastMapPoint = current;
         _lastChosenNodeId = chosenNodeId;
         _lastActIndex = actIndex;
         _lastChoice = choice;
+    }
+
+    private static bool IsSameMapPoint(MapPoint point, MapPoint? other, int actIndex)
+    {
+        if (other == null)
+            return false;
+
+        return PathGraphExtractor.NodeId(actIndex, point)
+            .Equals(PathGraphExtractor.NodeId(actIndex, other), StringComparison.Ordinal);
     }
 
     private static List<string> GetAvailableNodeIds(MapPoint? fromPoint, int actIndex)
