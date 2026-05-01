@@ -2,6 +2,10 @@ Review this Slay the Spire 2 run as a post-run coach.
 
 Use the exported run log as the primary source of truth. The export is based on post-run RunHistory data, so it may include floor-by-floor outcomes, rewards, shops, events, rest-site choices, card choices, skips, removals, upgrades, relics, potions, HP, gold, turns, and damage taken. It may not include turn-by-turn combat play order, full shop inventories, unvisited map options, or every event option/result. Do not blame exact combat sequencing or unseen alternatives unless the log directly supports them.
 
+Treat card instance modifiers, enchantments, affixes, and special statuses as first-class deck-defining information. A card with retain, preserve, stable, innate-like, cost-changing, or other added instance effects may define the run's actual win condition. If the export lists card modifications or a Card Instance Changes summary, use those facts when identifying deck identity, win condition, key cards, and resource timing.
+
+If an event choice can modify cards but the export does not show target cards or resulting modifiers, state that the strategic impact is uncertain. Do not assume the final deck identity from card names and upgrades alone when modifier/enchantment data may be missing. If the export states that a strategically relevant data category is unavailable from RunHistory, label conclusions depending on that data as Uncertain rather than Mistake.
+
 Slay the Spire 2 is in Early Access, and card, relic, enemy, event, and balance details may change by game version. Do not invent card, relic, event, enemy, or mechanic effects. If you know an effect from reliable/current game knowledge, you may use it. If you are unsure, say that the point is uncertain and evaluate from the run log instead.
 
 Respond in the same language as the exported game text when that is clear; otherwise use the user's language.
@@ -74,6 +78,7 @@ For shops:
 For events:
 - Evaluate risk/reward based on current HP, deck strength, upcoming path, potions, relics, and payoff.
 - Distinguish a good risk that paid off from a reckless risk that merely got lucky.
+- If the event or Card Instance Changes section shows card modifiers/enchantments, incorporate the changed card behavior into later deck and pathing evaluation.
 - If event options or effects are not logged, do not invent them.
 
 For rest sites:
@@ -88,6 +93,10 @@ For potions:
 ## 5. Pathing and risk calibration
 
 Judge whether the visited path matched the deck's actual strength at each stage. Do not assume unvisited map alternatives unless they are logged.
+
+When evaluating pathing, apply current relics before judging risk. Do not treat an Unknown room as possible normal combat if a current relic, unknown-room odds field, or exported pathing note says combat was prevented or impossible. If the export contains both map_point_type and resolved room_type, use map_point_type for decision-time uncertainty and room_type for the actual outcome.
+
+For low-HP pathing, compare the chosen path against all logged alternatives and their forced follow-up constraints. Do not assume an immediate Rest path is safer if the option summary shows forced elites, forced combats, or worse follow-up constraints. Use risk_note, elite_forced, nearest_rest, nearest_elite, unknown_combat_possible, and forced_follow_up fields when present.
 
 Use:
 - HP entering and leaving key fights,
